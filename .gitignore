@@ -61,3 +61,6 @@ out/
 tmp/
 temp/
 *.swp
+
+# Local file-functionality explanations (not part of the app)
+file-docs/
