@@ -64,3 +64,7 @@ temp/
 
 # Local file-functionality explanations (not part of the app)
 file-docs/
+
+# Frontend build output served by Spring Boot (keep folder, ignore contents)
+rtgpoll-backend/src/main/resources/static/**
+!rtgpoll-backend/src/main/resources/static/.gitkeep
