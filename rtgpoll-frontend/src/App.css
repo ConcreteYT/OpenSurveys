@@ -1,0 +1,643 @@
+.App {
+  min-height: 100vh;
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  position: relative;
+  /* Default accent (green) — overridden by .accent-* */
+  --accent: #0d5c3a;
+  --accent-bright: #2ecc71;
+  --accent-soft: #34c77a;
+  --accent-hover: #107043;
+  --accent-rgb: 13, 92, 58;
+  --bs-primary: var(--accent);
+  --bs-primary-rgb: var(--accent-rgb);
+}
+
+.App.accent-purple {
+  --accent: #44006b;
+  --accent-bright: #ad1fff;
+  --accent-soft: #a87ae0;
+  --accent-hover: #551483;
+  --accent-rgb: 68, 0, 107;
+}
+
+.App.accent-red {
+  --accent: #8b1a1a;
+  --accent-bright: #ff4d4d;
+  --accent-soft: #f08080;
+  --accent-hover: #a02828;
+  --accent-rgb: 139, 26, 26;
+}
+
+.App.accent-blue {
+  --accent: #0a3d6b;
+  --accent-bright: #1f8fff;
+  --accent-soft: #5ba3e0;
+  --accent-hover: #175285;
+  --accent-rgb: 10, 61, 107;
+}
+
+.App.accent-green {
+  --accent: #0d5c3a;
+  --accent-bright: #2ecc71;
+  --accent-soft: #34c77a;
+  --accent-hover: #107043;
+  --accent-rgb: 13, 92, 58;
+}
+
+/* Enable smooth interpolation of accent vars for the rainbow cycle */
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #9b1b4a;
+}
+
+@property --accent-bright {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ff2d55;
+}
+
+@property --accent-soft {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ff6b8a;
+}
+
+@property --accent-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #7a153a;
+}
+
+@keyframes rainbow-accent-vars {
+  0%,
+  100% {
+    --accent: #9b1b4a;
+    --accent-bright: #ff2d55;
+    --accent-soft: #ff6b8a;
+    --accent-hover: #7a153a;
+    --accent-rgb: 155, 27, 74;
+  }
+  16% {
+    --accent: #9a4a00;
+    --accent-bright: #ff9500;
+    --accent-soft: #ffb340;
+    --accent-hover: #7a3a00;
+    --accent-rgb: 154, 74, 0;
+  }
+  33% {
+    --accent: #7a6500;
+    --accent-bright: #ffd60a;
+    --accent-soft: #ffe566;
+    --accent-hover: #5c4c00;
+    --accent-rgb: 122, 101, 0;
+  }
+  50% {
+    --accent: #0d5c3a;
+    --accent-bright: #2ecc71;
+    --accent-soft: #34c77a;
+    --accent-hover: #107043;
+    --accent-rgb: 13, 92, 58;
+  }
+  66% {
+    --accent: #0a3d6b;
+    --accent-bright: #1f8fff;
+    --accent-soft: #5ba3e0;
+    --accent-hover: #175285;
+    --accent-rgb: 10, 61, 107;
+  }
+  83% {
+    --accent: #6b1b8a;
+    --accent-bright: #d500f9;
+    --accent-soft: #e070ff;
+    --accent-hover: #551470;
+    --accent-rgb: 107, 27, 138;
+  }
+}
+
+/* Rainbow drives every accent consumer (buttons, links, blobs, etc.) */
+.App.accent-rainbow {
+  --accent: #9b1b4a;
+  --accent-bright: #ff2d55;
+  --accent-soft: #ff6b8a;
+  --accent-hover: #7a153a;
+  --accent-rgb: 155, 27, 74;
+  animation: rainbow-accent-vars 12s linear infinite;
+}
+
+.accent-cycle-icon--rainbow {
+  background: var(--accent-bright) !important;
+}
+
+/* Mono: black in light mode, white in dark mode — all accent consumers */
+.App.theme-light.accent-mono {
+  --accent: #111111;
+  --accent-bright: #3a3a3a;
+  --accent-soft: #4a4a4a;
+  --accent-hover: #2a2a2a;
+  --accent-rgb: 17, 17, 17;
+}
+
+.App.theme-dark.accent-mono {
+  --accent: #f5f5f5;
+  --accent-bright: #ffffff;
+  --accent-soft: #e8e8e8;
+  --accent-hover: #ffffff;
+  --accent-rgb: 245, 245, 245;
+}
+
+.accent-cycle-icon--mono {
+  background: linear-gradient(135deg, #111111 50%, #f5f5f5 50%) !important;
+}
+
+/* White primary fill needs dark label text in dark mode */
+.App.theme-dark.accent-mono .btn-primary {
+  --bs-btn-color: #111111;
+  --bs-btn-hover-color: #111111;
+  --bs-btn-active-color: #111111;
+  --bs-btn-disabled-color: #111111;
+  color: #111111;
+}
+
+.App.theme-dark.accent-mono .btn-outline-primary:hover,
+.App.theme-dark.accent-mono .btn-outline-primary:active {
+  color: #111111 !important;
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+}
+
+.persistent-blobs {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.persistent-blob-shell {
+  position: absolute;
+}
+
+.persistent-blob {
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(var(--accent), var(--accent-bright));
+  will-change: border-radius, transform;
+}
+
+/* Identical 0% / 100% shapes so the loop has no seam */
+@keyframes persistent-blob-morph-1 {
+  0%,
+  100% {
+    border-radius: 42% 58% 70% 30% / 45% 55% 45% 55%;
+  }
+  25% {
+    border-radius: 60% 40% 30% 70% / 55% 45% 60% 40%;
+  }
+  50% {
+    border-radius: 35% 65% 55% 45% / 65% 35% 65% 35%;
+  }
+  75% {
+    border-radius: 50% 50% 40% 60% / 40% 60% 50% 50%;
+  }
+}
+
+@keyframes persistent-blob-morph-2 {
+  0%,
+  100% {
+    border-radius: 35% 65% 55% 45% / 65% 35% 65% 35%;
+  }
+  25% {
+    border-radius: 50% 50% 40% 60% / 40% 60% 50% 50%;
+  }
+  50% {
+    border-radius: 42% 58% 70% 30% / 45% 55% 45% 55%;
+  }
+  75% {
+    border-radius: 60% 40% 30% 70% / 55% 45% 60% 40%;
+  }
+}
+
+@keyframes persistent-blob-spin-cw {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes persistent-blob-spin-ccw {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.persistent-blob-1 {
+  border-radius: 42% 58% 70% 30% / 45% 55% 45% 55%;
+  animation:
+    persistent-blob-morph-1 16s linear infinite,
+    persistent-blob-spin-cw 18s linear infinite;
+}
+
+.persistent-blob-2 {
+  border-radius: 35% 65% 55% 45% / 65% 35% 65% 35%;
+  animation:
+    persistent-blob-morph-2 18s linear infinite,
+    persistent-blob-spin-ccw 22s linear infinite;
+}
+
+/* Animatable radius for a soft-edged circular theme reveal */
+@property --wipe-r {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* Theme wipe: sharp UI, only the circle edge is feathered/blurred */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.95s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+  animation-name: none;
+  opacity: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+  animation-name: theme-wipe-reveal-new;
+  /* Soft band at the circle edge (~48px feather); interior stays sharp */
+  -webkit-mask-image: radial-gradient(
+    circle at var(--theme-wipe-x, 50%) var(--theme-wipe-y, 50%),
+    #000 0px,
+    #000 max(0px, calc(var(--wipe-r) - 48px)),
+    transparent var(--wipe-r)
+  );
+  mask-image: radial-gradient(
+    circle at var(--theme-wipe-x, 50%) var(--theme-wipe-y, 50%),
+    #000 0px,
+    #000 max(0px, calc(var(--wipe-r) - 48px)),
+    transparent var(--wipe-r)
+  );
+}
+
+@keyframes theme-wipe-reveal-new {
+  from {
+    --wipe-r: 0px;
+  }
+  to {
+    --wipe-r: var(--theme-wipe-r, 100vmax);
+  }
+}
+
+.App.theme-light {
+  --app-bg: #f7f7fb;
+  --app-text: #212529;
+  --app-card-bg: #ffffff;
+  --app-card-border: rgba(0, 0, 0, 0.12);
+  --app-muted: #6c757d;
+  --app-navbar-bg: #f8f9fa;
+}
+
+.App.theme-dark {
+  --app-bg: #121212;
+  --app-text: #f8f9fa;
+  --app-card-bg: #1f1f1f;
+  --app-card-border: rgba(255, 255, 255, 0.12);
+  --app-muted: #adb5bd;
+  --app-navbar-bg: #1b1f24;
+}
+
+body {
+  background-color: var(--app-bg);
+  color: var(--app-text);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html,
+body {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
+.navbar {
+  background-color: var(--app-navbar-bg) !important;
+}
+
+.auth-switch-link {
+  transition: color 0.15s ease;
+}
+
+.auth-switch-link:hover,
+.auth-switch-link:focus {
+  /* Keep ≥4.5:1 on white for every accent (green failed at 72%) */
+  color: color-mix(in srgb, var(--accent) 88%, white) !important;
+  text-decoration: none !important;
+}
+
+.theme-dark .auth-switch-link:hover,
+.theme-dark .auth-switch-link:focus {
+  color: color-mix(in srgb, var(--accent-bright) 65%, white) !important;
+}
+
+.card,
+.form-control,
+.form-select,
+.table,
+.dropdown-menu {
+  background-color: var(--app-card-bg) !important;
+  color: var(--app-text) !important;
+  border-color: var(--app-card-border) !important;
+}
+
+.card.bg-glass {
+  background-color: rgba(255, 255, 255, 0.28) !important;
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.background-radial-gradient {
+  background-color: rgba(255, 255, 255, 0.18);
+  backdrop-filter: saturate(160%) blur(28px);
+  -webkit-backdrop-filter: saturate(160%) blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 8px 40px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.form-control::placeholder {
+  color: var(--app-muted);
+}
+
+.text-muted {
+  color: var(--app-muted) !important;
+}
+
+.theme-dark .background-radial-gradient {
+  background-color: rgba(18, 18, 18, 0.28) !important;
+  backdrop-filter: saturate(160%) blur(28px);
+  -webkit-backdrop-filter: saturate(160%) blur(28px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
+}
+
+.theme-dark .bg-glass,
+.theme-dark .card.bg-glass {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+
+.theme-dark .btn-outline-secondary {
+  color: var(--app-text);
+  border-color: var(--app-card-border);
+}
+
+.theme-dark .btn-outline-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--app-text);
+  border-color: var(--app-card-border);
+}
+
+.theme-dark .btn-outline-primary {
+  color: var(--accent-soft);
+  border-color: var(--accent-soft);
+}
+
+.theme-dark .btn-outline-primary:hover {
+  background-color: var(--accent-hover);
+  color: #ffffff;
+  border-color: var(--accent-hover);
+}
+
+.welcome-heading {
+  color: var(--accent);
+}
+
+.section-heading {
+  color: var(--accent);
+}
+
+.navbar-brand {
+  color: var(--accent) !important;
+  display: flex;
+  align-items: center;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.navbar-logo {
+  height: 36px;
+  width: auto;
+  display: block;
+}
+
+.theme-dark .welcome-heading {
+  color: var(--accent-soft) !important;
+}
+
+.theme-dark .section-heading {
+  color: var(--accent-soft) !important;
+}
+
+.theme-dark .navbar-brand {
+  color: var(--accent-soft) !important;
+}
+
+.purple-heading {
+  color: var(--accent);
+}
+
+.theme-dark .btn-outline-dark {
+  color: #f8f9fa !important;
+  background-color: #2f2f2f !important;
+  border-color: #6c757d !important;
+}
+
+.theme-dark .btn-outline-dark:hover {
+  background-color: #3f3f3f !important;
+  color: #ffffff !important;
+}
+
+.theme-dark .btn-outline-danger {
+  color: #f8f9fa !important;
+  background-color: rgba(122, 31, 31, 0.35) !important;
+  border-color: rgba(196, 78, 78, 0.7) !important;
+}
+
+.theme-dark .btn-outline-danger:hover {
+  background-color: rgba(155, 44, 44, 0.45) !important;
+  color: #ffffff !important;
+}
+
+.theme-dark .btn-outline-secondary svg,
+.theme-dark .btn-outline-secondary svg * {
+  stroke: #ffffff !important;
+}
+
+.theme-dark .intern-user-table {
+  color: #f8f9fa !important;
+  background-color: #1f1f1f !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.theme-dark .intern-user-table thead th {
+  background-color: #2b2b2b !important;
+  color: #f8f9fa !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.theme-dark .intern-user-table tbody td,
+.theme-dark .intern-user-table tbody th {
+  background-color: #1f1f1f !important;
+  color: #f8f9fa !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.theme-dark .intern-user-table tbody tr:hover td,
+.theme-dark .intern-user-table tbody tr:hover th {
+  background-color: #2c2c2c !important;
+}
+
+.theme-dark .purple-heading {
+  color: var(--accent-soft) !important;
+}
+
+/* Keep Bootstrap primary buttons aligned with accent */
+.App .btn-primary {
+  --bs-btn-bg: var(--accent);
+  --bs-btn-border-color: var(--accent);
+  --bs-btn-hover-bg: var(--accent-hover);
+  --bs-btn-hover-border-color: var(--accent-hover);
+  --bs-btn-active-bg: var(--accent);
+  --bs-btn-active-border-color: var(--accent);
+  --bs-btn-disabled-bg: var(--accent);
+  --bs-btn-disabled-border-color: var(--accent);
+}
+
+.App .btn-outline-primary {
+  --bs-btn-color: var(--accent);
+  --bs-btn-border-color: var(--accent);
+  --bs-btn-hover-bg: var(--accent);
+  --bs-btn-hover-border-color: var(--accent);
+  --bs-btn-active-bg: var(--accent);
+  --bs-btn-active-border-color: var(--accent);
+  --bs-btn-disabled-color: var(--accent);
+  --bs-btn-disabled-border-color: var(--accent);
+}
+
+.App .text-primary {
+  color: var(--accent) !important;
+}
+
+.theme-dark .text-primary,
+.theme-dark .auth-switch-link {
+  color: var(--accent-soft) !important;
+}
+
+.theme-dark .btn-outline-primary {
+  --bs-btn-color: var(--accent-soft);
+  --bs-btn-border-color: var(--accent-soft);
+  --bs-btn-hover-bg: var(--accent-hover);
+  --bs-btn-hover-border-color: var(--accent-hover);
+  --bs-btn-hover-color: #ffffff;
+  --bs-btn-active-bg: var(--accent);
+  --bs-btn-active-border-color: var(--accent);
+  --bs-btn-active-color: #ffffff;
+  --bs-btn-disabled-color: var(--accent-soft);
+  --bs-btn-disabled-border-color: var(--accent-soft);
+}
+
+.feature-unavailable-tip {
+  position: absolute;
+  z-index: 1080;
+  max-width: min(260px, calc(100vw - 16px));
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(28, 28, 32, 0.94);
+  color: #f5f5f7;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.feature-unavailable-tip.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.theme-dark .feature-unavailable-tip {
+  background: rgba(245, 245, 247, 0.96);
+  color: #1c1c20;
+}
+
+/* Phone / small-tablet layout: reduce stacked padding and oversized type */
+@media (max-width: 767.98px) {
+  .background-radial-gradient {
+    padding: 12px !important;
+    border-radius: 12px !important;
+    min-height: auto !important;
+  }
+
+  .App .container.py-5 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .App .container.my-5,
+  .App .my-5 {
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .App .py-5 {
+    padding-top: 1.25rem !important;
+    padding-bottom: 1.25rem !important;
+  }
+
+  .App .px-md-5 {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .App .display-5,
+  .App .display-6 {
+    font-size: clamp(1.5rem, 7vw, 2.25rem) !important;
+  }
+
+  .App .lead {
+    font-size: 1rem !important;
+  }
+
+  .navbar .d-flex.align-items-center.gap-2 {
+    flex-wrap: wrap;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .navbar .form-control[type='search'] {
+    max-width: 100%;
+    width: 100%;
+  }
+}

@@ -1,0 +1,63 @@
+# =========================
+# OS
+# =========================
+.DS_Store
+
+# =========================
+# Java / Maven / Spring Boot
+# =========================
+*.class
+*.log
+*.ctxt
+.mtj.tmp/
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Maven wrapper cache (optional local files)
+.mvn/timing.properties
+
+# Spring Boot local config
+application-local.properties
+
+# =========================
+# Node / React / Vite
+# =========================
+node_modules/
+dist/
+coverage/
+*.local
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# IntelliJ IDEA
+# =========================
+.idea/
+*.iml
+out/
+
+# =========================
+# VS Code
+# =========================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# =========================
+# Cursor
+# =========================
+.cursor/
+
+# =========================
+# Misc
+# =========================
+tmp/
+temp/
+*.swp
