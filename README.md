@@ -1,8 +1,8 @@
-# RTGPoll
+# Open Surveys
 
 ## What this software is
 
-RTGPoll is a full-stack survey (polling) web app built as a school learning project. Users can register, sign in, create and edit surveys, and share them so others can fill them out without an account. Admins can manage user accounts.
+Open Surveys is a full-stack survey (polling) web app built as a school learning project. Users can register, sign in, create and edit surveys, and share them so others can fill them out without an account. Admins can manage user accounts.
 
 It is a **monorepo**: React frontend and Spring Boot backend live in one Git repository.
 
