@@ -15,7 +15,7 @@ It is a **monorepo**: React frontend and Spring Boot backend live in one Git rep
 
 ### ⚠️ VERY IMPORTANT — Navbar logo and `.env` files
 
-The navbar brand image (`logo.png`) and real secrets (`.env`) are **gitignored** and are **not** in the repo. If you clone or host RTGPoll yourself, you **must**:
+The navbar brand image (`logo.png`) and real secrets (`.env`) are **gitignored** and are **not** in the repo. If you clone or host OpenSurveys yourself, you **must**:
 
 1. Add your own logo at `rtgpoll-frontend/public/logo.png`
 2. Copy each `.env.example` to `.env` and fill in real values (`rtgpoll-backend/.env` and `rtgpoll-frontend/.env`)
