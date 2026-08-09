@@ -122,3 +122,9 @@ Setup and run details: [`installinstructions.md`](installinstructions.md) · [`r
 ### Database
 
 - **MySQL** — users, forms, questions, answers, verification codes
+
+### Current Team
+
+- ConcreteYt
+- stoli9000-source
+- steinbaron11
