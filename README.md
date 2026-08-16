@@ -128,3 +128,11 @@ Setup and run details: [`installinstructions.md`](installinstructions.md) · [`r
 - ConcreteYt
 - stoli9000-source
 - steinbaron11
+
+---
+
+## License
+
+Open Surveys is licensed under the [MIT License](LICENSE).
+
+Copyright (c) 2026 **OpenSurveysDev**. You may use, modify, and distribute this software freely. If you use this project or substantial portions of it, please retain the copyright notice in the [LICENSE](LICENSE) file.

@@ -74,7 +74,7 @@ public class VerificationCodeService {
             mailSender.send(message);
         } catch (MailException | IllegalStateException e) {
             log.warn("Failed to send verification email to {}: {}", user.getEmail(), e.getMessage());
-            throw new MailSendFailedException("failed to send verification email");
+            throw new MailSendFailedException("Failed to send verification email");
         }
     }
 

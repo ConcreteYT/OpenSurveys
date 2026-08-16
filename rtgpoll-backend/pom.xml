@@ -11,14 +11,20 @@
 	<groupId>com.RTGpoll</groupId>
 	<artifactId>rtgpoll</artifactId>
 	<version>1.0.0-OfficialRelease</version>
-	<name/>
-	<description/>
+	<name>Open Surveys</name>
+	<description>Full-stack survey web application</description>
 	<url/>
 	<licenses>
-		<license/>
+		<license>
+			<name>MIT License</name>
+			<url>https://opensource.org/licenses/MIT</url>
+			<distribution>repo</distribution>
+		</license>
 	</licenses>
 	<developers>
-		<developer/>
+		<developer>
+			<name>OpenSurveysDev</name>
+		</developer>
 	</developers>
 	<scm>
 		<connection/>
