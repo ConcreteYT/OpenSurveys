@@ -62,7 +62,7 @@ Clone the project (adjust the URL if you use SSH or a fork):
 
 ```powershell
 git clone <repository-url>
-cd RTGPoll
+cd OpenSurveys
 ```
 
 ---
@@ -71,7 +71,7 @@ cd RTGPoll
 
 ## 2. Java 25
 
-The backend (`rtgpoll-backend/pom.xml`) targets **Java 25**.
+The backend (`opensurveys-backend/pom.xml`) targets **Java 25**.
 
 ### Windows
 
@@ -150,7 +150,7 @@ npm -v
 Install frontend dependencies once (after Node is installed):
 
 ```powershell
-cd rtgpoll-frontend
+cd opensurveys-frontend
 npm install
 ```
 
@@ -160,7 +160,7 @@ npm install
 
 ## 4. MySQL Server
 
-RTGPoll uses **MySQL** (JDBC driver `com.mysql.cj.jdbc.Driver`). Microsoft SQL Server is not supported.
+OpenSurveys uses **MySQL** (JDBC driver `com.mysql.cj.jdbc.Driver`). Microsoft SQL Server is not supported.
 
 ### Windows (official installer — recommended)
 
@@ -213,18 +213,18 @@ sudo systemctl enable mysql
 
 ### Create the application database
 
-With the server running, create an empty database named `rtgpoll`.
+With the server running, create an empty database named `opensurveys`.
 
 **Option A — MySQL Workbench (optional GUI)**
 
 1. Connect to `localhost` / `127.0.0.1`, port `3306`, user `root`, your password.
 2. Right-click in **SCHEMAS** → **Create Schema...**
-3. Name: `rtgpoll` → **Apply**.
+3. Name: `opensurveys` → **Apply**.
 
 **Option B — command line**
 
 ```powershell
-mysql -u root -p -e "CREATE DATABASE rtgpoll;"
+mysql -u root -p -e "CREATE DATABASE opensurveys;"
 ```
 
 If `mysql` is not on your PATH (common on Windows), use the full path to `mysql.exe` from your MySQL install (for example under `C:\Program Files\MySQL\MySQL Server 8.0\bin\`).
@@ -253,7 +253,7 @@ Or install it from the same MySQL Installer bundle / [https://dev.mysql.com/down
   - Port: `3306`
   - Username: `root`
   - Password: your MySQL root password
-3. **Test Connection**, then connect and create schema `rtgpoll` if you have not already.
+3. **Test Connection**, then connect and create schema `opensurveys` if you have not already.
 
 ---
 
@@ -266,7 +266,7 @@ Or install it from the same MySQL Installer bundle / [https://dev.mysql.com/down
 ### Navbar logo
 
 1. Name the file exactly: `logo.png`
-2. Place it at: `rtgpoll-frontend/public/logo.png`
+2. Place it at: `opensurveys-frontend/public/logo.png`
 3. Use a PNG that looks clear at about **36px** height (navbar size)
 
 
@@ -274,18 +274,18 @@ Or install it from the same MySQL Installer bundle / [https://dev.mysql.com/down
 ### Backend `.env`
 
 ```powershell
-cd rtgpoll-backend
+cd opensurveys-backend
 Copy-Item .env.example .env
 ```
 
 macOS / Linux: `cp .env.example .env`
 
-Edit `rtgpoll-backend/.env` and set at least:
+Edit `opensurveys-backend/.env` and set at least:
 
 
 | Variable                                    | What to put                                                                     |
 | ------------------------------------------- | ------------------------------------------------------------------------------- |
-| `DB_URL`                                    | `jdbc:mysql://localhost:3306/rtgpoll?useSSL=false&allowPublicKeyRetrieval=true` |
+| `DB_URL`                                    | `jdbc:mysql://localhost:3306/opensurveys?useSSL=false&allowPublicKeyRetrieval=true` |
 | `DB_USERNAME`                               | MySQL user (often `root`)                                                       |
 | `DB_PASSWORD`                               | That user’s MySQL password                                                      |
 | `JWT_SECRET`                                | A long random secret string                                                     |
@@ -301,7 +301,7 @@ Comments for every variable are in `.env.example`.
 ### Frontend `.env`
 
 ```powershell
-cd rtgpoll-frontend
+cd opensurveys-frontend
 Copy-Item .env.example .env
 ```
 
@@ -329,8 +329,8 @@ Required only if you want Google login buttons to work.
   - `http://localhost:3000` (dev frontend)
   - `http://localhost:8080` (if you use the production-style build served by Spring)
 4. Copy the client ID into:
-  - `rtgpoll-backend/.env` → `GOOGLE_CLIENT_ID`
-  - `rtgpoll-frontend/.env` → `REACT_APP_GOOGLE_CLIENT_ID`
+  - `opensurveys-backend/.env` → `GOOGLE_CLIENT_ID`
+  - `opensurveys-frontend/.env` → `REACT_APP_GOOGLE_CLIENT_ID`
 
 ---
 
@@ -366,11 +366,11 @@ Before following `[runinstructions.md](runinstructions.md)`:
 - [ ] `java -version` shows **25**
 - [ ] `node -v` and `npm -v` work
 - [ ] MySQL service is **Running**
-- [ ] Database `rtgpoll` exists
-- [ ] `rtgpoll-frontend/public/logo.png` exists
-- [ ] `rtgpoll-backend/.env` and `rtgpoll-frontend/.env` exist and are filled in
+- [ ] Database `opensurveys` exists
+- [ ] `opensurveys-frontend/public/logo.png` exists
+- [ ] `opensurveys-backend/.env` and `opensurveys-frontend/.env` exist and are filled in
 - [ ] No leftover OS env vars (`DB_URL`, etc.) pointing at a remote database
-- [ ] `npm install` completed in `rtgpoll-frontend/`
+- [ ] `npm install` completed in `opensurveys-frontend/`
 
 Then start the backend and frontend using **runinstructions.md**.
 

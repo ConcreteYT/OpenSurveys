@@ -12,10 +12,10 @@
         },
         {
             "type": "java",
-            "name": "RtGpollApplication",
+            "name": "OpenSurveysApplication",
             "request": "launch",
-            "mainClass": "com.RTGpoll.RtGpollApplication",
-            "projectName": "demo"
+            "mainClass": "com.opensurveys.OpenSurveysApplication",
+            "projectName": "opensurveys"
         }
     ]
 }

@@ -8,8 +8,8 @@ It is a **monorepo**: React frontend and Spring Boot backend live in one Git rep
 
 | Folder | Purpose |
 |--------|---------|
-| `rtgpoll-backend/` | Java REST API, MySQL access, JWT auth; can also serve the built React app |
-| `rtgpoll-frontend/` | React SPA — UI, routing, i18n, API calls |
+| `opensurveys-backend/` | Java REST API, MySQL access, JWT auth; can also serve the built React app |
+| `opensurveys-frontend/` | React SPA — UI, routing, i18n, API calls |
 | `installinstructions.md` | One-time installs and first-time setup |
 | `runinstructions.md` | How to start backend + frontend locally |
 
@@ -17,8 +17,8 @@ It is a **monorepo**: React frontend and Spring Boot backend live in one Git rep
 
 The navbar brand image (`logo.png`) and real secrets (`.env`) are **gitignored** and are **not** in the repo. If you clone or host OpenSurveys yourself, you **must**:
 
-1. Add your own logo at `rtgpoll-frontend/public/logo.png`
-2. Copy each `.env.example` to `.env` and fill in real values (`rtgpoll-backend/.env` and `rtgpoll-frontend/.env`)
+1. Add your own logo at `opensurveys-frontend/public/logo.png`
+2. Copy each `.env.example` to `.env` and fill in real values (`opensurveys-backend/.env` and `opensurveys-frontend/.env`)
 
 Without these, the navbar logo is broken and auth / database / email will not work. See [`installinstructions.md`](installinstructions.md), then [`runinstructions.md`](runinstructions.md).
 

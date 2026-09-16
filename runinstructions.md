@@ -4,18 +4,18 @@ How to **start** the servers. For installing Java, Node, MySQL, Workbench, logo,
 
 This project has two servers:
 
-- `rtgpoll-backend/` for the Spring Boot API on port `8080`
-- `rtgpoll-frontend/` for the React/npm app on port `3000`
+- `opensurveys-backend/` for the Spring Boot API on port `8080`
+- `opensurveys-frontend/` for the React/npm app on port `3000`
 
 ## Before you run
 
 Confirm the install checklist in [`installinstructions.md`](installinstructions.md) is done:
 
 - Java 25, Node.js, and MySQL Server are installed
-- MySQL is **running** and database `rtgpoll` exists
-- `rtgpoll-frontend/public/logo.png` is in place
-- `rtgpoll-backend/.env` and `rtgpoll-frontend/.env` exist and are filled in
-- `npm install` has been run once in `rtgpoll-frontend/`
+- MySQL is **running** and database `opensurveys` exists
+- `opensurveys-frontend/public/logo.png` is in place
+- `opensurveys-backend/.env` and `opensurveys-frontend/.env` exist and are filled in
+- `npm install` has been run once in `opensurveys-frontend/`
 - No OS environment variables (`DB_URL`, etc.) override `.env` with a remote database
 
 If the navbar logo is missing or auth / database / email fails, fix setup in the install guide — not by changing these run steps.
@@ -32,7 +32,7 @@ Use this for local development: React on port `3000`, Spring Boot on port `8080`
 2. Go to the backend folder:
 
 ```powershell
-cd rtgpoll-backend
+cd opensurveys-backend
 ```
 
 3. Start the Spring Boot app with the Maven Wrapper:
@@ -55,7 +55,7 @@ cd rtgpoll-backend
 2. Go to the frontend folder:
 
 ```powershell
-cd rtgpoll-frontend
+cd opensurveys-frontend
 ```
 
 3. If this is your first time running the frontend (or you have not done it yet during install), install dependencies:
@@ -90,7 +90,7 @@ By default the app only runs on `localhost`, so people on the internet cannot op
 
 Only tunnel port `3000`. The React dev server proxies API calls to your local backend on `8080`, so visitors do not need a separate tunnel for the backend.
 
-#### 1. Start RTGPoll locally
+#### 1. Start OpenSurveys locally
 
 1. Start MySQL (see [`installinstructions.md`](installinstructions.md) if it is not installed yet).
 2. Start the Spring Boot backend on port `8080`.
@@ -155,38 +155,38 @@ Prerequisite installs and `.env` setup are the same as local — see [`installin
 
 In production, Spring Boot serves the built React app from `src/main/resources/static/` on port `8080` (API + SPA together). You do **not** run `npm start`.
 
-Leave `REACT_APP_API_URL` unset in `rtgpoll-frontend/.env` when the SPA is served by this backend (same origin). Set it only if the API is on a different host.
+Leave `REACT_APP_API_URL` unset in `opensurveys-frontend/.env` when the SPA is served by this backend (same origin). Set it only if the API is on a different host.
 
 ### 1. Build the frontend
 
 ```powershell
-cd rtgpoll-frontend
+cd opensurveys-frontend
 npm install
 npm run build
 ```
 
-This writes the production bundle to `rtgpoll-frontend/build/`.
+This writes the production bundle to `opensurveys-frontend/build/`.
 
 ### 2. Copy the build into the backend
 
 Replace the contents of Spring’s static folder with the new build:
 
 ```powershell
-Remove-Item -Recurse -Force ..\rtgpoll-backend\src\main\resources\static\*
-Copy-Item -Recurse -Force .\build\* ..\rtgpoll-backend\src\main\resources\static\
+Remove-Item -Recurse -Force ..\opensurveys-backend\src\main\resources\static\*
+Copy-Item -Recurse -Force .\build\* ..\opensurveys-backend\src\main\resources\static\
 ```
 
 macOS / Linux:
 
 ```bash
-rm -rf ../rtgpoll-backend/src/main/resources/static/*
-cp -R build/* ../rtgpoll-backend/src/main/resources/static/
+rm -rf ../opensurveys-backend/src/main/resources/static/*
+cp -R build/* ../opensurveys-backend/src/main/resources/static/
 ```
 
 ### 3. Start the backend
 
 ```powershell
-cd ..\rtgpoll-backend
+cd ..\opensurveys-backend
 .\mvnw.cmd spring-boot:run
 ```
 

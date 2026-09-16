@@ -66,5 +66,5 @@ temp/
 file-docs/
 
 # Frontend build output served by Spring Boot (keep folder, ignore contents)
-rtgpoll-backend/src/main/resources/static/**
-!rtgpoll-backend/src/main/resources/static/.gitkeep
+opensurveys-backend/src/main/resources/static/**
+!opensurveys-backend/src/main/resources/static/.gitkeep
