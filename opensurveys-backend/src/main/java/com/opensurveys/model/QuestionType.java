@@ -28,8 +28,15 @@ public final class QuestionType {
     // between RATING_MAX_MIN and RATING_MAX_MAX inclusive (e.g. "5" or "10").
     public static final int RATING = 3;
 
+    // Respondent image upload. questionOptions is max file count (1..IMAGE_UPLOAD_MAX_FILES).
+    public static final int IMAGE_UPLOAD = 4;
+
     public static final int RATING_MAX_MIN = 5;
     public static final int RATING_MAX_MAX = 10;
+
+    public static final int IMAGE_UPLOAD_MAX_FILES = 10;
+    public static final int IMAGE_UPLOAD_MIN_FILES = 1;
+    public static final long IMAGE_UPLOAD_MAX_BYTES_PER_QUESTION = 100L * 1024 * 1024;
 
     private static final Pattern SELECT_COUNT_SUFFIX = Pattern.compile("^(\\d+)!$");
 
@@ -41,7 +48,24 @@ public final class QuestionType {
                 && (type == SKIPPABLE_TEXT
                 || type == TEXT
                 || type == MULTIPLE_CHOICE
-                || type == RATING);
+                || type == RATING
+                || type == IMAGE_UPLOAD);
+    }
+
+    // Parses questionOptions for IMAGE_UPLOAD. Returns null if missing/invalid.
+    public static Integer parseImageUploadMaxFiles(String questionOptions) {
+        if (questionOptions == null || questionOptions.isBlank()) {
+            return null;
+        }
+        try {
+            int max = Integer.parseInt(questionOptions.trim());
+            if (max < IMAGE_UPLOAD_MIN_FILES || max > IMAGE_UPLOAD_MAX_FILES) {
+                return null;
+            }
+            return max;
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     // Parses questionOptions for RATING questions. Returns null if missing/invalid.

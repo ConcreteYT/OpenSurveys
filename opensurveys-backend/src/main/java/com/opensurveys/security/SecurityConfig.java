@@ -71,10 +71,15 @@ public class SecurityConfig {
                         // token too - this must be listed before the plain "/forms" rule below
                         // so its POST method doesn't fall through to requiring authentication.
                         .requestMatchers(HttpMethod.POST, "/forms/*/answers").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/forms/*/staging/*/questions/*/files").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/forms/*/staging/*/commit").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/forms/*/media/*").permitAll()
                         // FormController#listMyForms / #createForm / #updateForm: only signed-in users.
                         .requestMatchers(HttpMethod.GET, "/forms").authenticated()
                         .requestMatchers(HttpMethod.POST, "/forms").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/forms/*").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/forms/*").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/forms/*/export").authenticated()
                         // UserController: admin-only account directory and management.
                         .requestMatchers("/users", "/users/**").hasRole("ADMIN")
                         // Any other unlisted route defaults to requiring authentication.

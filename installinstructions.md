@@ -7,7 +7,7 @@ One-time setup for tools and project config. After this, use `[runinstructions.m
 | -------------------------------------------------- | ----------------------------------------------------------- |
 | **Git**                                            | Clone / pull the repo                                       |
 | **Java 25**                                        | Run the Spring Boot backend                                 |
-| **Node.js (LTS)**                                  | Run / build the React frontend (`npm`)                      |
+| **Node.js 20 LTS**                                 | Run / build the React frontend (`npm`)                      |
 | **MySQL Server**                                   | Store users, surveys, and answers                           |
 | **MySQL Workbench** (optional)                     | GUI to create the database and inspect tables               |
 | **Google Cloud OAuth client** (optional for local) | Google Sign-In                                              |
@@ -106,33 +106,36 @@ Set `JAVA_HOME` to the JDK 25 install if `java -version` still points at an olde
 
 
 
-## 3. Node.js (includes npm)
+## 3. Node.js 20 LTS (includes npm)
 
-Use an **LTS** release (recommended for Create React App).
+This repo targets **Node 20.x** (Create React App 5 + `react-scripts`). The root and `opensurveys-frontend/.nvmrc` files pin major version `20`.
 
 ### Windows
 
 ```powershell
-winget install --id OpenJS.NodeJS.LTS -e
+winget install --id OpenJS.NodeJS.20 -e --accept-package-agreements --accept-source-agreements
 ```
 
-Or download: [https://nodejs.org/](https://nodejs.org/)
+Or download the **20.x LTS** Windows installer: [https://nodejs.org/en/download/](https://nodejs.org/en/download/)
 
-Close and reopen the terminal, then check:
+Close and reopen the terminal, then check (expect `v20.x.x`, not v24+):
 
 ```powershell
 node -v
 npm -v
 ```
 
-
+If `node -v` still shows an older major version, adjust **Settings → Apps → Installed apps** so only one Node.js install is on your PATH, or use [nvm-windows](https://github.com/coreybutler/nvm-windows) and run `nvm use 20` in the repo root.
 
 ### macOS
 
 ```bash
-brew install node
-# or install the LTS pkg from https://nodejs.org/
-node -v
+# Homebrew (Node 20)
+brew install node@20
+brew link --overwrite --force node@20
+
+# or nvm: nvm install 20 && nvm use
+node -v   # expect v20.x.x
 npm -v
 ```
 
@@ -140,9 +143,12 @@ npm -v
 
 ### Linux (Debian/Ubuntu)
 
-Prefer NodeSource or `nvm` for a current LTS; avoid very old distro Node packages if possible.
+Use NodeSource 20.x, `nvm`, or `fnm`; avoid very old distro Node packages.
 
 ```bash
+# Example with nvm
+nvm install 20
+nvm use 20
 node -v
 npm -v
 ```
@@ -283,15 +289,15 @@ macOS / Linux: `cp .env.example .env`
 Edit `opensurveys-backend/.env` and set at least:
 
 
-| Variable                                    | What to put                                                                     |
-| ------------------------------------------- | ------------------------------------------------------------------------------- |
+| Variable                                    | What to put                                                                         |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `DB_URL`                                    | `jdbc:mysql://localhost:3306/opensurveys?useSSL=false&allowPublicKeyRetrieval=true` |
-| `DB_USERNAME`                               | MySQL user (often `root`)                                                       |
-| `DB_PASSWORD`                               | That user’s MySQL password                                                      |
-| `JWT_SECRET`                                | A long random secret string                                                     |
-| `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD` | Local admin login (username defaults to `admin`)                                |
-| `GOOGLE_CLIENT_ID`                          | Google Cloud **Web** OAuth client ID (needed for Google Sign-In)                |
-| `MAIL_*` / `MAIL_FROM`                      | SMTP settings (needed for email verification flows)                             |
+| `DB_USERNAME`                               | MySQL user (often `root`)                                                           |
+| `DB_PASSWORD`                               | That user’s MySQL password                                                          |
+| `JWT_SECRET`                                | A long random secret string                                                         |
+| `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD` | Local admin login (username defaults to `admin`)                                    |
+| `GOOGLE_CLIENT_ID`                          | Google Cloud **Web** OAuth client ID (needed for Google Sign-In)                    |
+| `MAIL_*` / `MAIL_FROM`                      | SMTP settings (needed for email verification flows)                                 |
 
 
 Comments for every variable are in `.env.example`.
@@ -358,13 +364,32 @@ Without SMTP, the rest of the app can still run; those email actions return an e
 
 
 
+## 8. Respondent image uploads (disk storage)
+
+Uploaded images are stored on the **backend machine**, not in MySQL:
+
+- Directory: `opensurveys-backend/data/uploads/` (created automatically; contents are **gitignored**).
+- Optional override: set `APP_UPLOAD_DIR` in `opensurveys-backend/.env` to an absolute path on your server.
+- Limits: **100 MB total per image-upload question per response**, up to **10 files** (max count is configurable per question in the editor). Allowed types: JPEG, PNG, WebP, GIF.
+
+**Production notes (dedicated laptop server):**
+
+- Ensure the disk has enough free space for expected uploads; include `data/uploads` in your backup plan alongside the MySQL database.
+- Deleting a survey from **Your surveys** removes its database rows and the matching folder under `data/uploads/forms/{formId}/`.
+- Spring multipart limits are set in `application.properties` (`105MB` per staged request).
+- On startup the backend runs `ALTER TABLE ANSWER MODIFY answer TEXT` so image-upload filename lists fit (Hibernate `ddl-auto=update` alone may not widen the column). If uploads still fail with “Data too long for column 'answer'”, run that SQL once in MySQL Workbench against your database.
+
+---
+
+
+
 ## 9. Quick verification checklist
 
 Before following `[runinstructions.md](runinstructions.md)`:
 
 - [ ] `git --version` works
 - [ ] `java -version` shows **25**
-- [ ] `node -v` and `npm -v` work
+- [ ] `node -v` shows **v20.x.x** and `npm -v` works
 - [ ] MySQL service is **Running**
 - [ ] Database `opensurveys` exists
 - [ ] `opensurveys-frontend/public/logo.png` exists

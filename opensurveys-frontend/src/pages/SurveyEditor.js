@@ -15,7 +15,11 @@ const QUESTION_TYPE = {
   TEXT: 1,
   MULTIPLE_CHOICE: 2,
   RATING: 3,
+  IMAGE_UPLOAD: 4,
 }
+
+const IMAGE_UPLOAD_MAX_FILES = 10
+const IMAGE_UPLOAD_MIN_FILES = 1
 
 const RATING_MAX_MIN = 5
 const RATING_MAX_MAX = 10
@@ -26,6 +30,7 @@ function getTypeLabels(t) {
     { value: QUESTION_TYPE.TEXT, label: t('editor.typeText') },
     { value: QUESTION_TYPE.MULTIPLE_CHOICE, label: t('editor.typeMcq') },
     { value: QUESTION_TYPE.RATING, label: t('editor.typeRating') },
+    { value: QUESTION_TYPE.IMAGE_UPLOAD, label: t('editor.typeImageUpload') },
   ]
 }
 
@@ -44,6 +49,7 @@ function emptyQuestion() {
     mcqOptions: ['', ''],
     selectCount: 1,
     ratingMax: 5,
+    imageUploadMaxFiles: 3,
   }
 }
 
@@ -79,6 +85,14 @@ function parseRatingMax(questionOptions) {
   return max
 }
 
+function parseImageUploadMaxFiles(questionOptions) {
+  const max = Number(String(questionOptions || '').trim())
+  if (!Number.isInteger(max) || max < IMAGE_UPLOAD_MIN_FILES || max > IMAGE_UPLOAD_MAX_FILES) {
+    return 3
+  }
+  return max
+}
+
 function questionFromApi(question) {
   const type = Number(question.questionType)
   const base = {
@@ -89,6 +103,7 @@ function questionFromApi(question) {
     mcqOptions: ['', ''],
     selectCount: 1,
     ratingMax: 5,
+    imageUploadMaxFiles: 3,
   }
 
   if (base.questionType === QUESTION_TYPE.MULTIPLE_CHOICE) {
@@ -97,6 +112,8 @@ function questionFromApi(question) {
     base.selectCount = mcq.selectCount
   } else if (base.questionType === QUESTION_TYPE.RATING) {
     base.ratingMax = parseRatingMax(question.questionOptions)
+  } else if (base.questionType === QUESTION_TYPE.IMAGE_UPLOAD) {
+    base.imageUploadMaxFiles = parseImageUploadMaxFiles(question.questionOptions)
   }
 
   return base
@@ -114,6 +131,9 @@ function buildQuestionOptions(draft) {
   }
   if (draft.questionType === QUESTION_TYPE.RATING) {
     return String(draft.ratingMax)
+  }
+  if (draft.questionType === QUESTION_TYPE.IMAGE_UPLOAD) {
+    return String(draft.imageUploadMaxFiles)
   }
   return null
 }
@@ -140,6 +160,13 @@ function validateDraft(name, questions, t) {
       const max = Number(q.ratingMax)
       if (!Number.isInteger(max) || max < RATING_MAX_MIN || max > RATING_MAX_MAX) {
         return t('editor.errRatingMax', { label, min: RATING_MAX_MIN, max: RATING_MAX_MAX })
+      }
+    }
+
+    if (q.questionType === QUESTION_TYPE.IMAGE_UPLOAD) {
+      const max = Number(q.imageUploadMaxFiles)
+      if (!Number.isInteger(max) || max < IMAGE_UPLOAD_MIN_FILES || max > IMAGE_UPLOAD_MAX_FILES) {
+        return t('editor.errImageUploadMax', { label, min: IMAGE_UPLOAD_MIN_FILES, max: IMAGE_UPLOAD_MAX_FILES })
       }
     }
   }
@@ -588,6 +615,28 @@ export default function SurveyEditor() {
                               onChange={(e) =>
                                 updateQuestion(question.clientKey, {
                                   ratingMax: Number(e.target.value) || RATING_MAX_MIN,
+                                })
+                              }
+                              disabled={saving}
+                            />
+                          </div>
+                        )}
+
+                        {question.questionType === QUESTION_TYPE.IMAGE_UPLOAD && (
+                          <div style={{ maxWidth: 220 }}>
+                            <label className="form-label" htmlFor={`q-upload-max-${question.clientKey}`}>
+                              <T k="editor.imageUploadMax" />
+                            </label>
+                            <input
+                              id={`q-upload-max-${question.clientKey}`}
+                              type="number"
+                              className="form-control"
+                              min={IMAGE_UPLOAD_MIN_FILES}
+                              max={IMAGE_UPLOAD_MAX_FILES}
+                              value={question.imageUploadMaxFiles}
+                              onChange={(e) =>
+                                updateQuestion(question.clientKey, {
+                                  imageUploadMaxFiles: Number(e.target.value) || IMAGE_UPLOAD_MIN_FILES,
                                 })
                               }
                               disabled={saving}

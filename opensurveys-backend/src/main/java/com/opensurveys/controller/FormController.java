@@ -5,12 +5,16 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+
+import com.opensurveys.service.FormAccessService;
+import com.opensurveys.service.UploadStorageService;
 
 import com.opensurveys.dto.AnswerRequest;
 import com.opensurveys.dto.AnswerResponse;
@@ -31,6 +35,7 @@ import com.opensurveys.repository.FormRepository;
 import com.opensurveys.repository.QuestionRepository;
 import com.opensurveys.repository.UserRepository;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -63,6 +68,12 @@ public class FormController {
     // AnswerRepository's own class comment).
     @Autowired
     private AnswerRepository answerRepository;
+
+    @Autowired
+    private FormAccessService formAccessService;
+
+    @Autowired
+    private UploadStorageService uploadStorageService;
 
     // Requires auth. Returns only forms created by the JWT principal (newest first).
     @GetMapping("/forms")
@@ -214,17 +225,18 @@ public class FormController {
         }
 
         Form form = formOptional.get();
-        if (!form.isResponsesPublic()) {
-            Optional<User> userOptional = resolveAuthenticatedUser();
-            if (userOptional.isEmpty()) {
+        Optional<User> userOptional = resolveAuthenticatedUser();
+        if (!formAccessService.canViewResponses(form, userOptional)) {
+            if (formAccessService.adminBlockedFromResponses(form, userOptional)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(Map.of("error", "Administrators cannot view survey responses"));
+            }
+            if (!form.isResponsesPublic()) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of("error", "Responses for this survey are private"));
             }
-            User user = userOptional.get();
-            if (form.getCreator() == null || !form.getCreator().getId().equals(user.getId())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("error", "Only the survey owner can view these responses"));
-            }
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Not allowed to view these responses"));
         }
 
         List<Answer> savedAnswers = answerRepository.findAllByQuestionFormIdOrderByIdAsc(id);
@@ -266,11 +278,18 @@ public class FormController {
     // those same question ids -> we persist one ANSWER row per AnswerRequest, each linked to
     // its Question via the FK (see Answer.question).
     @PostMapping("/forms/{id}/answers")
-    public ResponseEntity<List<AnswerResponse>> submitAnswers(@PathVariable Long id,
-                                                                @RequestBody AnswerSubmissionRequest submissionRequest) {
+    public ResponseEntity<?> submitAnswers(@PathVariable Long id,
+                                           @RequestBody AnswerSubmissionRequest submissionRequest) {
         Optional<Form> formOptional = formRepository.findById(id);
         if (formOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        Form form = formOptional.get();
+        boolean hasUploadQuestions = form.getQuestions().stream()
+                .anyMatch(q -> q.getQuestionType() != null && q.getQuestionType() == QuestionType.IMAGE_UPLOAD);
+        if (hasUploadQuestions) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Use POST /forms/{id}/staging/{stagingId}/commit for this survey"));
         }
 
         if (submissionRequest.getAnswers() == null || submissionRequest.getAnswers().isEmpty()) {
@@ -297,6 +316,9 @@ public class FormController {
             if (question.getForm() == null || !question.getForm().getId().equals(id)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
+            if (question.getQuestionType() != null && question.getQuestionType() == QuestionType.IMAGE_UPLOAD) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+            }
 
             Answer answer = new Answer();
             answer.setAnswer(answerRequest.getAnswer());
@@ -318,6 +340,34 @@ public class FormController {
         return ResponseEntity.status(HttpStatus.CREATED).body(answerResponses);
     }
 
+    @DeleteMapping("/forms/{id}")
+    public ResponseEntity<?> deleteForm(@PathVariable Long id) {
+        Optional<User> userOptional = resolveAuthenticatedUser();
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        User user = userOptional.get();
+
+        Optional<Form> formOptional = formRepository.findById(id);
+        if (formOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        Form form = formOptional.get();
+        if (!formAccessService.canManageForm(form, user)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "You can only delete surveys you created"));
+        }
+
+        try {
+            uploadStorageService.deleteFormUploads(id);
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to delete uploaded files"));
+        }
+        formRepository.delete(form);
+        return ResponseEntity.noContent().build();
+    }
+
     private Optional<User> resolveAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -332,11 +382,17 @@ public class FormController {
             if (!QuestionType.isValid(questionRequest.getQuestionType())) {
                 return Optional.of(ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(Map.of("error",
-                                "questionType must be 0 (SKIPPABLE_TEXT), 1 (TEXT), 2 (MULTIPLE_CHOICE), or 3 (RATING)")));
+                                "questionType must be 0 (SKIPPABLE_TEXT), 1 (TEXT), 2 (MULTIPLE_CHOICE), 3 (RATING), or 4 (IMAGE_UPLOAD)")));
             }
 
             Integer type = questionRequest.getQuestionType();
             String options = questionRequest.getQuestionOptions();
+            if (type == QuestionType.IMAGE_UPLOAD
+                    && QuestionType.parseImageUploadMaxFiles(options) == null) {
+                return Optional.of(ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("error",
+                                "IMAGE_UPLOAD questions require questionOptions as max files from 1 to 10 (e.g. \"3\")")));
+            }
             if (type == QuestionType.MULTIPLE_CHOICE
                     && QuestionType.parseMultipleChoice(options) == null) {
                 return Optional.of(ResponseEntity.status(HttpStatus.BAD_REQUEST)

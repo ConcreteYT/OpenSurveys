@@ -25,7 +25,8 @@ public class Answer {
     @Column(name = "answer_id")
     private Long id;
 
-    @Column(name = "answer")
+    // TEXT so IMAGE_UPLOAD answers (semicolon-separated stored filenames) and long text replies fit.
+    @Column(name = "answer", columnDefinition = "TEXT")
     private String answer;
 
     // Owning side of the Question<->Answer relationship - FK column QUESTION_question_id

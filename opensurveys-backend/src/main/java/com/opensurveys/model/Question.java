@@ -36,7 +36,7 @@ public class Question {
 
     // Integer code from QuestionType:
     // 0=SKIPPABLE_TEXT (display only, no answer), 1=TEXT (typed answer),
-    // 2=MULTIPLE_CHOICE, 3=RATING (stars 1..max).
+    // 2=MULTIPLE_CHOICE, 3=RATING (stars 1..max), 4=IMAGE_UPLOAD (respondent files).
     // Stored as INT per the schema (not a JPA enum) so the DB column stays a bare integer.
     @Column(name = "questiontype")
     private Integer questionType;

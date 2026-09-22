@@ -36,3 +36,7 @@ build/
 .env
 .env.*
 !.env.example
+
+### Respondent upload storage (files on disk; not in git) ###
+data/uploads/*
+!data/uploads/.gitkeep

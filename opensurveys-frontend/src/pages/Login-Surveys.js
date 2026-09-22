@@ -19,6 +19,7 @@ export default function LoginSurveys() {
   const [forms, setForms] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [busyFormId, setBusyFormId] = useState(null)
 
   // Load the current user's forms once on mount; ignore late responses after unmount.
   useEffect(() => {
@@ -47,6 +48,38 @@ export default function LoginSurveys() {
       cancelled = true
     }
   }, [t])
+
+  async function handleExport(formId) {
+    setError('')
+    setBusyFormId(formId)
+    try {
+      const blob = await api.exportForm(formId)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `survey-${formId}-responses.zip`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err.message || t('surveys.exportError'))
+    } finally {
+      setBusyFormId(null)
+    }
+  }
+
+  async function handleDelete(formId) {
+    if (!window.confirm(t('surveys.deleteConfirm'))) return
+    setError('')
+    setBusyFormId(formId)
+    try {
+      await api.deleteForm(formId)
+      setForms((prev) => prev.filter((form) => form.id !== formId))
+    } catch (err) {
+      setError(err.message || t('surveys.deleteError'))
+    } finally {
+      setBusyFormId(null)
+    }
+  }
 
   return (
     <div className="container">
@@ -161,6 +194,22 @@ export default function LoginSurveys() {
                                 >
                                   <T k="surveys.edit" />
                                 </Link>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-secondary"
+                                  disabled={busyFormId === form.id}
+                                  onClick={() => handleExport(form.id)}
+                                >
+                                  {busyFormId === form.id ? t('surveys.exporting') : t('surveys.export')}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-outline-danger"
+                                  disabled={busyFormId === form.id}
+                                  onClick={() => handleDelete(form.id)}
+                                >
+                                  {busyFormId === form.id ? t('surveys.deleting') : t('surveys.delete')}
+                                </button>
                               </div>
                             </td>
                           </tr>

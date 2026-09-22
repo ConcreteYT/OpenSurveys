@@ -45,6 +45,47 @@ function authHeader() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+export function mediaUrl(formId, fileName) {
+  return `${API_BASE_URL}/forms/${formId}/media/${encodeURIComponent(fileName)}`;
+}
+
+async function requestMultipart(path, formData, { auth = false } = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      ...(auth ? authHeader() : {}),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    if (response.status === 401 && auth) {
+      clearAuth();
+    }
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error || `Request failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
+async function requestBlob(path, { auth = true } = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'GET',
+    headers: {
+      ...(auth ? authHeader() : {}),
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401 && auth) {
+      clearAuth();
+    }
+    const errorBody = await response.json().catch(() => null);
+    throw new Error(errorBody?.error || `Request failed with status ${response.status}`);
+  }
+  return response.blob();
+}
+
 async function request(path, { method = 'GET', body, auth = false } = {}) {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method,
@@ -89,4 +130,16 @@ export const api = {
   // Send token when present so owners can load private responses; endpoint stays public for public forms.
   getFormResponses: (id) => request(`/forms/${id}/responses`, { auth: isAuthenticated() }),
   submitAnswers: (id, data) => request(`/forms/${id}/answers`, { method: 'POST', body: data }),
+  stageQuestionFiles: (formId, stagingId, questionId, files) => {
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    return requestMultipart(
+      `/forms/${formId}/staging/${stagingId}/questions/${questionId}/files`,
+      formData,
+    );
+  },
+  commitSubmission: (formId, stagingId, data) =>
+    request(`/forms/${formId}/staging/${stagingId}/commit`, { method: 'POST', body: data }),
+  deleteForm: (id) => request(`/forms/${id}`, { method: 'DELETE', auth: true }),
+  exportForm: (id) => requestBlob(`/forms/${id}/export`, { auth: true }),
 };

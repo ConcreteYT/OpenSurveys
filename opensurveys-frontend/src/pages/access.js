@@ -11,7 +11,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { animate } from 'animejs'
-import { api } from '../api/client'
+import { api, mediaUrl } from '../api/client'
 import { useT } from '../i18n'
 
 // Must match backend QuestionType (QUESTION.questiontype):
@@ -24,10 +24,96 @@ const QUESTION_TYPE = {
   TEXT: 1,
   MULTIPLE_CHOICE: 2,
   RATING: 3,
+  IMAGE_UPLOAD: 4,
 }
+
+const IMAGE_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
+const ALLOWED_UPLOAD_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 
 const RATING_MAX_MIN = 5
 const RATING_MAX_MAX = 10
+const IMAGE_UPLOAD_MAX_FILES = 10
+
+function parseImageUploadMaxFiles(questionOptions) {
+  const max = Number(String(questionOptions || '').trim())
+  if (!Number.isInteger(max) || max < 1 || max > IMAGE_UPLOAD_MAX_FILES) return 1
+  return max
+}
+
+function splitUploadFileNames(answer) {
+  if (!answer || typeof answer !== 'string') return []
+  return answer.split(';').map((part) => part.trim()).filter(Boolean)
+}
+
+function formHasUploadQuestions(questionList) {
+  return questionList.some((q) => q.questionType === QUESTION_TYPE.IMAGE_UPLOAD)
+}
+
+function validateUploadFiles(files, maxFiles, t) {
+  if (!files || files.length === 0) {
+    return t('access.uploadRequired')
+  }
+  if (files.length > maxFiles) {
+    return t('access.uploadTooMany', { max: maxFiles })
+  }
+  let total = 0
+  for (const file of files) {
+    total += file.size
+    const type = (file.type || '').toLowerCase()
+    if (!ALLOWED_UPLOAD_MIME.has(type)) {
+      return t('access.uploadTypeInvalid')
+    }
+  }
+  if (total > IMAGE_UPLOAD_MAX_BYTES) {
+    return t('access.uploadTooLarge')
+  }
+  return ''
+}
+
+function MediaThumbnail({ formId, fileName, authenticated }) {
+  const [src, setSrc] = React.useState(authenticated ? null : mediaUrl(formId, fileName))
+
+  React.useEffect(() => {
+    if (!authenticated) {
+      setSrc(mediaUrl(formId, fileName))
+      return undefined
+    }
+    let objectUrl
+    let cancelled = false
+    const token = localStorage.getItem('token')
+    fetch(mediaUrl(formId, fileName), {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load image')
+        return res.blob()
+      })
+      .then((blob) => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setSrc(objectUrl)
+      })
+      .catch(() => {
+        if (!cancelled) setSrc(null)
+      })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [formId, fileName, authenticated])
+
+  if (!src) {
+    return <div className="results-upload-thumb results-upload-thumb--loading" />
+  }
+  return (
+    <img
+      src={src}
+      alt=""
+      className="results-upload-thumb"
+      loading="lazy"
+    />
+  )
+}
 
 function completedKey(formId) {
   return `survey-completed-${formId}`
@@ -162,6 +248,9 @@ export default function Access() {
   const [responsesIndex, setResponsesIndex] = useState(0)
   const [isLoadingResponses, setIsLoadingResponses] = useState(false)
   const [isViewingResponses, setIsViewingResponses] = useState(false)
+  const [uploadFilesByQuestion, setUploadFilesByQuestion] = useState({})
+  const [pendingUploadFiles, setPendingUploadFiles] = useState([])
+  const [uploadProgress, setUploadProgress] = useState(null)
   const questionPanelRef = useRef(null)
   const progressFillRef = useRef(null)
   const autoOpenedResponsesRef = useRef(false)
@@ -183,6 +272,9 @@ export default function Access() {
     setResponsesIndex(0)
     setIsLoadingResponses(false)
     setIsViewingResponses(false)
+    setUploadFilesByQuestion({})
+    setPendingUploadFiles([])
+    setUploadProgress(null)
     autoOpenedResponsesRef.current = false
 
     if (!formId) {
@@ -262,6 +354,10 @@ export default function Access() {
   const ratingMax = questionType === QUESTION_TYPE.RATING
     ? parseRatingMax(question.questionOptions)
     : null
+  const imageUploadMax = questionType === QUESTION_TYPE.IMAGE_UPLOAD
+    ? parseImageUploadMaxFiles(question.questionOptions)
+    : null
+  const responsesNeedAuthMedia = form?.responsesPublic === false
   const selectedRating = answer ? Number(answer) : 0
   const responseAnswers = normalizeAnswerList(responseQuestion?.answers)
   const responseMcqResults = responseQuestion?.questionType === QUESTION_TYPE.MULTIPLE_CHOICE
@@ -298,22 +394,72 @@ export default function Access() {
     return () => anim?.pause?.()
   }, [currentIndex, isCompleted, isFinalizing, isLoading, isLoadingResponses, isShowingResponses, responsesIndex])
 
-  const finishSurvey = async (allAnswers) => {
+  useEffect(() => {
+    if (!question || questionType !== QUESTION_TYPE.IMAGE_UPLOAD) {
+      setPendingUploadFiles([])
+      return
+    }
+    setPendingUploadFiles(uploadFilesByQuestion[question.id] || [])
+  }, [question, questionType, uploadFilesByQuestion])
+
+  const finishSurvey = async (allAnswers, uploadFilesMap = uploadFilesByQuestion) => {
     const answerList = Object.entries(allAnswers).map(([questionId, value]) => ({
       questionId: Number(questionId),
       answer: value,
     }))
 
-    // Backend rejects empty answer lists - if everything was display-only, still mark complete.
-    if (answerList.length > 0) {
-      await api.submitAnswers(form.id, { answers: answerList })
+    const hasUpload = formHasUploadQuestions(questions)
+
+    if (!hasUpload) {
+      if (answerList.length > 0) {
+        await api.submitAnswers(form.id, { answers: answerList })
+      }
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(completedKey(formId), 'true')
+      }
+      setIsFinalizing(false)
+      setIsCompleted(true)
+      return
     }
 
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(completedKey(formId), 'true')
+    const uploadQuestions = questions.filter((q) => q.questionType === QUESTION_TYPE.IMAGE_UPLOAD)
+    const stagingId = crypto.randomUUID()
+
+    try {
+      for (let i = 0; i < uploadQuestions.length; i += 1) {
+        const uploadQuestion = uploadQuestions[i]
+        const files = uploadFilesMap[uploadQuestion.id]
+        const validationError = validateUploadFiles(
+          files,
+          parseImageUploadMaxFiles(uploadQuestion.questionOptions),
+          t,
+        )
+        if (validationError) {
+          throw new Error(validationError)
+        }
+        setUploadProgress({
+          phase: 'upload',
+          index: i + 1,
+          total: uploadQuestions.length,
+          label: uploadQuestion.questionText || t('access.uploadQuestionFallback'),
+        })
+        await api.stageQuestionFiles(form.id, stagingId, uploadQuestion.id, files)
+      }
+
+      setUploadProgress({ phase: 'commit', index: uploadQuestions.length, total: uploadQuestions.length, label: '' })
+      await api.commitSubmission(form.id, stagingId, { answers: answerList })
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(completedKey(formId), 'true')
+      }
+      setUploadProgress(null)
+      setIsFinalizing(false)
+      setIsCompleted(true)
+    } catch (err) {
+      setUploadProgress(null)
+      setIsFinalizing(false)
+      throw err
     }
-    setIsFinalizing(false)
-    setIsCompleted(true)
   }
 
   const openResponses = useCallback(async () => {
@@ -370,7 +516,7 @@ export default function Access() {
       window.setTimeout(resolve, 60)
     })
 
-  const advance = async (nextAnswers) => {
+  const advance = async (nextAnswers, uploadFilesOverride) => {
     await runQuestionExit()
     setAnswers(nextAnswers)
     setAnswer('')
@@ -378,7 +524,12 @@ export default function Access() {
 
     if (isLastQuestion) {
       await showSubmittingPanel()
-      await finishSurvey(nextAnswers)
+      try {
+        await finishSurvey(nextAnswers, uploadFilesOverride)
+      } catch (err) {
+        setIsFinalizing(false)
+        throw err
+      }
     } else {
       setCurrentIndex((index) => index + 1)
     }
@@ -414,6 +565,31 @@ export default function Access() {
         await advance(answers)
       } catch (err) {
         setError(err.message || t('access.continueError'))
+      } finally {
+        setIsSubmitting(false)
+      }
+      return
+    }
+
+    if (questionType === QUESTION_TYPE.IMAGE_UPLOAD) {
+      const maxFiles = imageUploadMax ?? 1
+      const validationError = validateUploadFiles(pendingUploadFiles, maxFiles, t)
+      if (validationError) {
+        setError(validationError)
+        return
+      }
+
+      setError('')
+      setIsSubmitting(true)
+      try {
+        const nextUploadFiles = {
+          ...uploadFilesByQuestion,
+          [question.id]: pendingUploadFiles,
+        }
+        setUploadFilesByQuestion(nextUploadFiles)
+        await advance(answers, nextUploadFiles)
+      } catch (err) {
+        setError(err.message || t('access.submitError'))
       } finally {
         setIsSubmitting(false)
       }
@@ -483,6 +659,24 @@ export default function Access() {
   const choiceDisabled =
     (questionType === QUESTION_TYPE.MULTIPLE_CHOICE && (!mcq || choiceOptions.length === 0))
     || (questionType === QUESTION_TYPE.RATING && ratingMax == null)
+    || (questionType === QUESTION_TYPE.IMAGE_UPLOAD && imageUploadMax == null)
+
+  const onUploadFilesSelected = (event) => {
+    const selected = Array.from(event.target.files || [])
+    event.target.value = ''
+    setError('')
+    const maxFiles = imageUploadMax ?? 1
+    const validationError = validateUploadFiles(selected, maxFiles, t)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+    setPendingUploadFiles(selected)
+  }
+
+  const removePendingUpload = (index) => {
+    setPendingUploadFiles((prev) => prev.filter((_, i) => i !== index))
+  }
 
   return (
     <div className="container">
@@ -557,6 +751,32 @@ export default function Access() {
       border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
       border-radius: 10px;
       background: rgba(255, 255, 255, 0.18);
+    }
+
+    .results-upload-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .results-upload-thumb {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
+    }
+
+    .results-upload-thumb--loading {
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+      border-radius: 10px;
+      aspect-ratio: 1;
+    }
+
+    .upload-dropzone {
+      border: 2px dashed color-mix(in srgb, var(--accent) 35%, transparent);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.12);
     }
 
     .choice-option {
@@ -728,6 +948,27 @@ export default function Access() {
                               )
                             )}
 
+                            {responseQuestion?.questionType === QUESTION_TYPE.IMAGE_UPLOAD && (
+                              (() => {
+                                const imageNames = responseAnswers.flatMap((value) => splitUploadFileNames(value))
+                                if (imageNames.length === 0) {
+                                  return <p className="text-muted mb-4">{t('access.noUploadResponses')}</p>
+                                }
+                                return (
+                                  <div className="results-upload-grid mb-4">
+                                    {imageNames.map((fileName) => (
+                                      <MediaThumbnail
+                                        key={`${responseQuestion.id}-${fileName}`}
+                                        formId={formId}
+                                        fileName={fileName}
+                                        authenticated={responsesNeedAuthMedia}
+                                      />
+                                    ))}
+                                  </div>
+                                )
+                              })()
+                            )}
+
                             <div className="d-flex flex-wrap gap-2 align-items-center mb-0" style={{ marginTop: 8 }}>
                               <button
                                 type="button"
@@ -787,9 +1028,34 @@ export default function Access() {
                         ) : isFinalizing ? (
                           <div className="text-center">
                             <h2 className="fw-bold mb-3 welcome-heading">{t('access.submittingTitle')}</h2>
-                            <p className="text-muted mb-0">
-                              {t('access.submittingWait')}
-                            </p>
+                            {uploadProgress?.phase === 'upload' && (
+                              <>
+                                <p className="text-muted mb-2">
+                                  {t('access.uploadProgressQuestion', {
+                                    index: uploadProgress.index,
+                                    total: uploadProgress.total,
+                                    label: uploadProgress.label,
+                                  })}
+                                </p>
+                                <div className="progress mb-2" style={{ height: 8 }}>
+                                  <div
+                                    className="progress-bar"
+                                    role="progressbar"
+                                    style={{
+                                      width: `${Math.round((uploadProgress.index / uploadProgress.total) * 100)}%`,
+                                    }}
+                                  />
+                                </div>
+                              </>
+                            )}
+                            {uploadProgress?.phase === 'commit' && (
+                              <p className="text-muted mb-0">{t('access.uploadProgressCommit')}</p>
+                            )}
+                            {!uploadProgress && (
+                              <p className="text-muted mb-0">
+                                {t('access.submittingWait')}
+                              </p>
+                            )}
                           </div>
                         ) : question ? (
                           <form onSubmit={handleSubmit}>
@@ -899,6 +1165,67 @@ export default function Access() {
                                         ? `${selectedRating} / ${ratingMax}`
                                         : t('access.selectStars', { max: ratingMax })}
                                     </p>
+                                  </>
+                                )}
+                              </div>
+                            )}
+
+                            {questionType === QUESTION_TYPE.IMAGE_UPLOAD && (
+                              <div className="mb-4">
+                                {imageUploadMax == null ? (
+                                  <p className="text-muted mb-0">{t('access.invalidUploadConfig')}</p>
+                                ) : (
+                                  <>
+                                    <p className="text-muted small mb-2">
+                                      {t('access.uploadHint', { max: imageUploadMax })}
+                                    </p>
+                                    <div
+                                      className="upload-dropzone mb-3 p-4 text-center"
+                                      onDragOver={(e) => e.preventDefault()}
+                                      onDrop={(e) => {
+                                        e.preventDefault()
+                                        const dropped = Array.from(e.dataTransfer.files || [])
+                                        const validationError = validateUploadFiles(dropped, imageUploadMax, t)
+                                        if (validationError) {
+                                          setError(validationError)
+                                          return
+                                        }
+                                        setError('')
+                                        setPendingUploadFiles(dropped)
+                                      }}
+                                    >
+                                      <input
+                                        id={`upload-${question.id}`}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp,image/gif"
+                                        multiple={imageUploadMax > 1}
+                                        className="d-none"
+                                        onChange={onUploadFilesSelected}
+                                      />
+                                      <label htmlFor={`upload-${question.id}`} className="btn btn-outline-primary mb-0">
+                                        {t('access.chooseImages')}
+                                      </label>
+                                      <p className="text-muted small mt-2 mb-0">{t('access.uploadDropHint')}</p>
+                                    </div>
+                                    {pendingUploadFiles.length > 0 && (
+                                      <ul className="list-group mb-0">
+                                        {pendingUploadFiles.map((file, index) => (
+                                          <li
+                                            key={`${file.name}-${file.size}-${index}`}
+                                            className="list-group-item d-flex justify-content-between align-items-center gap-2"
+                                          >
+                                            <span className="text-truncate">{file.name}</span>
+                                            <button
+                                              type="button"
+                                              className="btn btn-sm btn-outline-secondary"
+                                              onClick={() => removePendingUpload(index)}
+                                            >
+                                              {t('access.removeFile')}
+                                            </button>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    )}
                                   </>
                                 )}
                               </div>
