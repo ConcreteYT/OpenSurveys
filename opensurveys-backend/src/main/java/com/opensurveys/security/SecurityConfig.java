@@ -1,5 +1,6 @@
 package com.opensurveys.security;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -40,8 +41,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // The built React app is served by this same app (see WebConfig) so it can
-                        // be reached at http://localhost:8080 directly. Loading the page/its assets
+                        // Async dispatches (the streamed export zip) continue a request that was
+                        // already authorized; the stateless JWT context is not re-established for them.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                        // The built React app is served by this same app (static resources plus
+                        // SpaController) so it can be reached at http://localhost:8080 directly. Loading the page/its assets
                         // must never require a token - React's own ProtectedRoute (client-side)
                         // is what actually gates page content; the rules below still gate the
                         // real data/actions underneath it.

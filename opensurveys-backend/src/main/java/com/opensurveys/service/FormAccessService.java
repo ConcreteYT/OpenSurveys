@@ -16,7 +16,7 @@ public class FormAccessService {
                 && form.getCreator().getId().equals(user.getId());
     }
 
-    public boolean isAdminUser(User user) {
+    private boolean isAdminUser(User user) {
         return user != null && User.ROLE_ADMIN.equals(user.getRole());
     }
 

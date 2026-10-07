@@ -7,7 +7,7 @@ import com.opensurveys.model.QuestionType;
 import com.opensurveys.model.User;
 import com.opensurveys.repository.AnswerRepository;
 import com.opensurveys.repository.FormRepository;
-import com.opensurveys.repository.UserRepository;
+import com.opensurveys.service.CurrentUserService;
 import com.opensurveys.service.FormAccessService;
 import com.opensurveys.service.UploadStorageService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,19 +16,19 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +47,7 @@ public class FormMediaController {
     private AnswerRepository answerRepository;
 
     @Autowired
-    private UserRepository userRepository;
+    private CurrentUserService currentUserService;
 
     @Autowired
     private UploadStorageService uploadStorageService;
@@ -62,14 +62,15 @@ public class FormMediaController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         Form form = formOptional.get();
-        Optional<User> userOptional = resolveAuthenticatedUser();
+        Optional<User> userOptional = currentUserService.get();
 
         if (!formAccessService.canViewResponses(form, userOptional)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Not allowed to view this media"));
         }
 
-        if (!uploadStorageService.formFileExists(formId, fileName)) {
+        Optional<Path> pathOptional = uploadStorageService.findFormFile(formId, fileName);
+        if (pathOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
@@ -78,7 +79,7 @@ public class FormMediaController {
         }
 
         try {
-            Path path = uploadStorageService.resolveFormFile(formId, fileName);
+            Path path = pathOptional.get();
             String contentType = Files.probeContentType(path);
             if (contentType == null) {
                 contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
@@ -93,23 +94,26 @@ public class FormMediaController {
         }
     }
 
+    // The CSV and the list of image files are prepared up front; only the zip itself is streamed,
+    // so image bytes never have to be held in memory. Spring only streams when the declared body
+    // type is StreamingResponseBody, so early error responses go through ExportRejectedException.
     @GetMapping("/forms/{formId}/export")
-    public ResponseEntity<?> exportForm(@PathVariable Long formId) {
-        Optional<User> userOptional = resolveAuthenticatedUser();
+    public ResponseEntity<StreamingResponseBody> exportForm(@PathVariable Long formId) {
+        Optional<User> userOptional = currentUserService.get();
         if (userOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            throw new ExportRejectedException(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
         }
         User user = userOptional.get();
 
         Optional<Form> formOptional = formRepository.findById(formId);
         if (formOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new ExportRejectedException(ResponseEntity.status(HttpStatus.NOT_FOUND).build());
         }
         Form form = formOptional.get();
 
         if (!formAccessService.canExportResponses(form, user)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Only the survey owner can export responses"));
+            throw new ExportRejectedException(ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Only the survey owner can export responses")));
         }
 
         List<Answer> answers = answerRepository.findAllByQuestionFormIdOrderByIdAsc(formId);
@@ -123,7 +127,7 @@ public class FormMediaController {
                 continue;
             }
             String answerText = answer.getAnswer() == null ? "" : answer.getAnswer();
-            if (question.getQuestionType() != null && question.getQuestionType() == QuestionType.IMAGE_UPLOAD) {
+            if (QuestionType.is(question.getQuestionType(), QuestionType.IMAGE_UPLOAD)) {
                 imageNames.addAll(UploadStorageService.splitAnswerFileNames(answerText));
             }
             csv.append(csvCell(answer.getId()))
@@ -138,56 +142,55 @@ public class FormMediaController {
                     .append('\n');
         }
 
-        try {
-            byte[] zipBytes = buildExportZip(csv.toString(), formId, imageNames);
-            String downloadName = "survey-" + formId + "-responses.zip";
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + downloadName + "\"")
-                    .contentType(MediaType.parseMediaType("application/zip"))
-                    .body(zipBytes);
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to build export"));
+        Map<String, Path> imagePaths = new LinkedHashMap<>();
+        for (String imageName : imageNames) {
+            uploadStorageService.findFormFile(formId, imageName)
+                    .ifPresent(path -> imagePaths.put(imageName, path));
+        }
+        byte[] csvBytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+
+        StreamingResponseBody body = outputStream -> writeExportZip(outputStream, csvBytes, imagePaths);
+        String downloadName = "survey-" + formId + "-responses.zip";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + downloadName + "\"")
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(body);
+    }
+
+    @ExceptionHandler(ExportRejectedException.class)
+    public ResponseEntity<?> handleExportRejected(ExportRejectedException e) {
+        return e.response;
+    }
+
+    private static final class ExportRejectedException extends RuntimeException {
+        private final transient ResponseEntity<?> response;
+
+        private ExportRejectedException(ResponseEntity<?> response) {
+            super(null, null, false, false);
+            this.response = response;
         }
     }
 
-    private byte[] buildExportZip(String csvContent, long formId, Set<String> imageNames) throws IOException {
-        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-        try (ZipOutputStream zip = new ZipOutputStream(byteStream)) {
+    private static void writeExportZip(OutputStream outputStream, byte[] csvBytes, Map<String, Path> imagePaths)
+            throws IOException {
+        try (ZipOutputStream zip = new ZipOutputStream(outputStream)) {
             zip.putNextEntry(new ZipEntry("responses.csv"));
-            zip.write(csvContent.getBytes(StandardCharsets.UTF_8));
+            zip.write(csvBytes);
             zip.closeEntry();
 
-            for (String imageName : imageNames) {
-                if (!uploadStorageService.formFileExists(formId, imageName)) {
-                    continue;
-                }
-                Path path = uploadStorageService.resolveFormFile(formId, imageName);
-                zip.putNextEntry(new ZipEntry("images/" + imageName));
-                try (InputStream in = Files.newInputStream(path)) {
+            for (Map.Entry<String, Path> image : imagePaths.entrySet()) {
+                zip.putNextEntry(new ZipEntry("images/" + image.getKey()));
+                try (InputStream in = Files.newInputStream(image.getValue())) {
                     in.transferTo(zip);
                 }
                 zip.closeEntry();
             }
         }
-        return byteStream.toByteArray();
     }
 
     private boolean isFileReferencedByFormAnswers(long formId, String fileName) {
-        List<Answer> answers = answerRepository.findAllByQuestionFormIdOrderByIdAsc(formId);
-        for (Answer answer : answers) {
-            Question question = answer.getQuestion();
-            if (question == null || question.getQuestionType() == null) {
-                continue;
-            }
-            if (question.getQuestionType() != QuestionType.IMAGE_UPLOAD) {
-                continue;
-            }
-            if (UploadStorageService.splitAnswerFileNames(answer.getAnswer()).contains(fileName)) {
-                return true;
-            }
-        }
-        return false;
+        return answerRepository.findAnswersContaining(formId, QuestionType.IMAGE_UPLOAD, fileName).stream()
+                .anyMatch(answer -> UploadStorageService.splitAnswerFileNames(answer).contains(fileName));
     }
 
     private static String csvCell(Object value) {
@@ -196,13 +199,5 @@ public class FormMediaController {
             return "\"" + text.replace("\"", "\"\"") + "\"";
         }
         return text;
-    }
-
-    private Optional<User> resolveAuthenticatedUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return Optional.empty();
-        }
-        return userRepository.findByUsername(authentication.getName());
     }
 }

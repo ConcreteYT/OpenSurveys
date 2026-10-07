@@ -25,7 +25,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -76,7 +75,7 @@ public class FormSubmissionController {
         if (question.getForm() == null || !question.getForm().getId().equals(formId)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Question does not belong to this survey"));
         }
-        if (question.getQuestionType() == null || question.getQuestionType() != QuestionType.IMAGE_UPLOAD) {
+        if (!QuestionType.is(question.getQuestionType(), QuestionType.IMAGE_UPLOAD)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Question is not an image upload type"));
         }
 
@@ -114,29 +113,18 @@ public class FormSubmissionController {
         }
         Form form = formOptional.get();
 
-        if (submissionRequest.getAnswers() == null) {
-            submissionRequest.setAnswers(List.of());
-        }
-
-        Map<Long, Question> questionsById = new HashMap<>();
-        for (Question question : form.getQuestions()) {
-            if (question.getId() != null) {
-                questionsById.put(question.getId(), question);
-            }
-        }
-
-        boolean hasUploadQuestions = form.getQuestions().stream()
-                .anyMatch(q -> q.getQuestionType() != null && q.getQuestionType() == QuestionType.IMAGE_UPLOAD);
-
-        if (!hasUploadQuestions) {
+        if (!form.hasImageUploadQuestions()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "This survey has no image upload questions; use POST /forms/{id}/answers"));
         }
 
+        List<AnswerRequest> answerRequests =
+                submissionRequest.getAnswers() != null ? submissionRequest.getAnswers() : List.of();
+        Map<Long, Question> questionsById = form.questionsById();
         Set<Long> textAnswerQuestionIds = new HashSet<>();
         List<Answer> textAnswersToSave = new ArrayList<>();
 
-        for (AnswerRequest answerRequest : submissionRequest.getAnswers()) {
+        for (AnswerRequest answerRequest : answerRequests) {
             if (answerRequest.getQuestionId() == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Missing questionId"));
             }
@@ -145,11 +133,11 @@ public class FormSubmissionController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "Invalid questionId"));
             }
             Integer type = question.getQuestionType();
-            if (type != null && type == QuestionType.IMAGE_UPLOAD) {
+            if (QuestionType.is(type, QuestionType.IMAGE_UPLOAD)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(Map.of("error", "Image upload answers must be submitted via staging, not in JSON"));
             }
-            if (type != null && type == QuestionType.SKIPPABLE_TEXT) {
+            if (QuestionType.is(type, QuestionType.SKIPPABLE_TEXT)) {
                 continue;
             }
             if (answerRequest.getAnswer() == null || answerRequest.getAnswer().isBlank()) {
@@ -180,25 +168,21 @@ public class FormSubmissionController {
             uploadStorageService.ensureRootExists();
 
             for (Question question : form.getQuestions()) {
-                if (question.getQuestionType() == null || question.getQuestionType() != QuestionType.IMAGE_UPLOAD) {
+                if (!QuestionType.is(question.getQuestionType(), QuestionType.IMAGE_UPLOAD)) {
                     continue;
                 }
                 Long qid = question.getId();
-                List<String> staged = uploadStorageService.listStagedFileNames(formId, stagingId, qid);
-                if (staged.isEmpty()) {
+                List<String> moved = uploadStorageService.moveStagedQuestionToFinal(formId, stagingId, qid);
+                if (moved.isEmpty()) {
                     uploadStorageService.deleteStagingSession(stagingId);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                             .body(Map.of("error", "Missing uploaded images for question " + qid));
                 }
-
-                String finalValue = uploadStorageService.moveStagedQuestionToFinal(formId, stagingId, qid);
-                for (String part : UploadStorageService.splitAnswerFileNames(finalValue)) {
-                    movedFilesForRollback.add(part);
-                }
+                movedFilesForRollback.addAll(moved);
 
                 Answer answer = new Answer();
                 answer.setQuestion(question);
-                answer.setAnswer(finalValue);
+                answer.setAnswer(String.join(";", moved));
                 uploadAnswersToSave.add(answer);
             }
 
@@ -206,36 +190,28 @@ public class FormSubmissionController {
             allToSave.addAll(uploadAnswersToSave);
 
             if (allToSave.isEmpty()) {
-                uploadStorageService.rollbackMovedFiles(formId, movedFilesForRollback);
-                uploadStorageService.deleteStagingSession(stagingId);
+                discardSubmission(formId, stagingId, movedFilesForRollback);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "No answers to save"));
             }
 
             List<Answer> savedAnswers = answerRepository.saveAll(allToSave);
             uploadStorageService.deleteStagingSession(stagingId);
-
-            List<AnswerResponse> answerResponses = new ArrayList<>();
-            for (Answer saved : savedAnswers) {
-                answerResponses.add(new AnswerResponse(
-                        saved.getId(),
-                        saved.getQuestion().getId(),
-                        saved.getAnswer()
-                ));
-            }
-            return ResponseEntity.status(HttpStatus.CREATED).body(answerResponses);
+            return ResponseEntity.status(HttpStatus.CREATED).body(AnswerResponse.fromAll(savedAnswers));
         } catch (UploadStorageService.UploadValidationException e) {
-            uploadStorageService.rollbackMovedFiles(formId, movedFilesForRollback);
-            uploadStorageService.deleteStagingSession(stagingId);
+            discardSubmission(formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         } catch (IOException e) {
-            uploadStorageService.rollbackMovedFiles(formId, movedFilesForRollback);
-            uploadStorageService.deleteStagingSession(stagingId);
+            discardSubmission(formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Failed to commit submission"));
         } catch (DataIntegrityViolationException e) {
-            uploadStorageService.rollbackMovedFiles(formId, movedFilesForRollback);
-            uploadStorageService.deleteStagingSession(stagingId);
+            discardSubmission(formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Could not save answers; please try again"));
         }
+    }
+
+    private void discardSubmission(long formId, String stagingId, List<String> movedFiles) {
+        uploadStorageService.rollbackMovedFiles(formId, movedFiles);
+        uploadStorageService.deleteStagingSession(stagingId);
     }
 }

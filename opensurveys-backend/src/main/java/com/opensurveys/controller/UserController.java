@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -12,10 +13,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.opensurveys.dto.UpdateUserRequest;
-import com.opensurveys.model.Form;
 import com.opensurveys.model.User;
-import com.opensurveys.repository.FormRepository;
 import com.opensurveys.repository.UserRepository;
+import com.opensurveys.service.UserDeletionService;
 
 import java.util.List;
 import java.util.Map;
@@ -30,7 +30,7 @@ public class UserController {
     private UserRepository userRepository;
 
     @Autowired
-    private FormRepository formRepository;
+    private UserDeletionService userDeletionService;
 
     // Password is never included here - User.password is annotated @JsonIgnore.
     @GetMapping("/users")
@@ -59,15 +59,14 @@ public class UserController {
                     .body(Map.of("error", "username is required"));
         }
 
-        Optional<User> sameName = userRepository.findByUsername(newUsername);
-        if (sameName.isPresent() && !sameName.get().getId().equals(id)) {
+        if (userRepository.isUsernameTakenByOther(newUsername, id)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "username already taken"));
         }
 
         // Refuse demoting/removing the last remaining admin.
         if (User.ROLE_ADMIN.equals(user.getRole()) && User.ROLE_USER.equals(newRole)
-                && countAdmins() <= 1) {
+                && userRepository.countByRole(User.ROLE_ADMIN) <= 1) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "cannot demote the last admin"));
         }
@@ -82,6 +81,7 @@ public class UserController {
     }
 
     @DeleteMapping("/users/{id}")
+    @Transactional
     public ResponseEntity<?> deleteUser(@PathVariable Long id) {
         Optional<User> userOpt = userRepository.findById(id);
         if (userOpt.isEmpty()) {
@@ -97,23 +97,13 @@ public class UserController {
                     .body(Map.of("error", "cannot delete your own account"));
         }
 
-        if (User.ROLE_ADMIN.equals(user.getRole()) && countAdmins() <= 1) {
+        if (User.ROLE_ADMIN.equals(user.getRole()) && userRepository.countByRole(User.ROLE_ADMIN) <= 1) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "cannot delete the last admin"));
         }
 
-        // Forms reference USER via FK; remove owned surveys (and cascaded questions/answers) first.
-        List<Form> forms = formRepository.findByCreatorOrderByIdDesc(user);
-        formRepository.deleteAll(forms);
-        userRepository.delete(user);
-
+        userDeletionService.deleteUserAndForms(user);
         return ResponseEntity.noContent().build();
-    }
-
-    private long countAdmins() {
-        return userRepository.findAll().stream()
-                .filter(u -> User.ROLE_ADMIN.equals(u.getRole()))
-                .count();
     }
 
     private static String normalizeRole(String role) {

@@ -3,8 +3,6 @@ package com.opensurveys.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,6 +11,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.opensurveys.service.CurrentUserService;
 import com.opensurveys.service.FormAccessService;
 import com.opensurveys.service.UploadStorageService;
 
@@ -23,7 +22,6 @@ import com.opensurveys.dto.FormRequest;
 import com.opensurveys.dto.FormResponse;
 import com.opensurveys.dto.FormResultsResponse;
 import com.opensurveys.dto.QuestionRequest;
-import com.opensurveys.dto.QuestionResponse;
 import com.opensurveys.dto.QuestionResultsResponse;
 import com.opensurveys.model.Answer;
 import com.opensurveys.model.Form;
@@ -32,14 +30,11 @@ import com.opensurveys.model.QuestionType;
 import com.opensurveys.model.User;
 import com.opensurveys.repository.AnswerRepository;
 import com.opensurveys.repository.FormRepository;
-import com.opensurveys.repository.QuestionRepository;
-import com.opensurveys.repository.UserRepository;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,17 +52,10 @@ public class FormController {
     private FormRepository formRepository;
 
     @Autowired
-    private UserRepository userRepository;
-
-    // Needed by submitAnswers below to resolve each AnswerRequest.questionId back into a
-    // Question entity (previously unused, per QuestionRepository's own class comment).
-    @Autowired
-    private QuestionRepository questionRepository;
-
-    // Needed by submitAnswers below to persist the new Answer rows (previously unused, per
-    // AnswerRepository's own class comment).
-    @Autowired
     private AnswerRepository answerRepository;
+
+    @Autowired
+    private CurrentUserService currentUserService;
 
     @Autowired
     private FormAccessService formAccessService;
@@ -78,16 +66,14 @@ public class FormController {
     // Requires auth. Returns only forms created by the JWT principal (newest first).
     @GetMapping("/forms")
     public ResponseEntity<?> listMyForms() {
-        Optional<User> userOptional = resolveAuthenticatedUser();
+        Optional<User> userOptional = currentUserService.get();
         if (userOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
-        List<Form> forms = formRepository.findByCreatorOrderByIdDesc(userOptional.get());
-        List<FormResponse> responses = new ArrayList<>();
-        for (Form form : forms) {
-            responses.add(toFormResponse(form));
-        }
+        List<FormResponse> responses = formRepository.findByCreatorOrderByIdDesc(userOptional.get()).stream()
+                .map(FormResponse::from)
+                .toList();
         return ResponseEntity.ok(responses);
     }
 
@@ -97,37 +83,32 @@ public class FormController {
     // never from the request body, so a caller can't fabricate a form under someone else's name.
     @PostMapping("/forms")
     public ResponseEntity<?> createForm(@RequestBody FormRequest formRequest) {
-        Optional<User> userOptional = resolveAuthenticatedUser();
+        Optional<User> userOptional = currentUserService.get();
         if (userOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         User creator = userOptional.get();
 
-        List<QuestionRequest> questionRequests =
-                formRequest.getQuestions() != null ? formRequest.getQuestions() : List.of();
+        List<QuestionRequest> questionRequests = questionRequestsOf(formRequest);
         Optional<ResponseEntity<?>> validationError = validateQuestionRequests(questionRequests);
         if (validationError.isPresent()) {
             return validationError.get();
         }
 
         Form form = new Form();
-        form.setName(formRequest.getName());
-        form.setResponsesPublic(formRequest.getResponsesPublic() == null || formRequest.getResponsesPublic());
+        applyFormFields(form, formRequest);
         form.setCreator(creator);
 
         // Build one Question entity per QuestionRequest and point each back at this Form
         // (Question owns the FK, FORM_form_id) so Form's cascade=ALL persists them together
         // in a single formRepository.save() call below.
         for (QuestionRequest questionRequest : questionRequests) {
-            Question question = new Question();
-            applyQuestionFields(question, questionRequest);
-            question.setForm(form);
-            form.getQuestions().add(question);
+            form.getQuestions().add(newQuestion(form, questionRequest));
         }
 
         Form savedForm = formRepository.save(form);
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(toFormResponse(savedForm));
+        return ResponseEntity.status(HttpStatus.CREATED).body(FormResponse.from(savedForm));
     }
 
     // Requires auth. Only the form's creator may update. Questions with an id that already
@@ -136,7 +117,7 @@ public class FormController {
     // answers cascade-deleted via Question.answers orphanRemoval).
     @PutMapping("/forms/{id}")
     public ResponseEntity<?> updateForm(@PathVariable Long id, @RequestBody FormRequest formRequest) {
-        Optional<User> userOptional = resolveAuthenticatedUser();
+        Optional<User> userOptional = currentUserService.get();
         if (userOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -148,25 +129,18 @@ public class FormController {
         }
         Form form = formOptional.get();
 
-        if (form.getCreator() == null || !form.getCreator().getId().equals(user.getId())) {
+        if (!formAccessService.canManageForm(form, user)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "You can only edit surveys you created"));
         }
 
-        List<QuestionRequest> questionRequests =
-                formRequest.getQuestions() != null ? formRequest.getQuestions() : List.of();
+        List<QuestionRequest> questionRequests = questionRequestsOf(formRequest);
         Optional<ResponseEntity<?>> validationError = validateQuestionRequests(questionRequests);
         if (validationError.isPresent()) {
             return validationError.get();
         }
 
-        Map<Long, Question> existingById = new HashMap<>();
-        for (Question question : form.getQuestions()) {
-            if (question.getId() != null) {
-                existingById.put(question.getId(), question);
-            }
-        }
-
+        Map<Long, Question> existingById = form.questionsById();
         Set<Long> keepIds = new HashSet<>();
         List<Question> additions = new ArrayList<>();
 
@@ -182,10 +156,7 @@ public class FormController {
                 applyQuestionFields(existing, questionRequest);
                 keepIds.add(questionId);
             } else {
-                Question question = new Question();
-                applyQuestionFields(question, questionRequest);
-                question.setForm(form);
-                additions.add(question);
+                additions.add(newQuestion(form, questionRequest));
             }
         }
 
@@ -195,10 +166,9 @@ public class FormController {
                 question.getId() != null && !keepIds.contains(question.getId()));
         form.getQuestions().addAll(additions);
 
-        form.setName(formRequest.getName());
-        form.setResponsesPublic(formRequest.getResponsesPublic() == null || formRequest.getResponsesPublic());
+        applyFormFields(form, formRequest);
         Form savedForm = formRepository.save(form);
-        return ResponseEntity.ok(toFormResponse(savedForm));
+        return ResponseEntity.ok(FormResponse.from(savedForm));
     }
 
     // Public/anonymous - no token required (see SecurityConfig permitAll for GET /forms/**).
@@ -206,12 +176,9 @@ public class FormController {
     // lets the frontend show "Created by <username>" at the top of the fill-out view.
     @GetMapping("/forms/{id}")
     public ResponseEntity<FormResponse> getForm(@PathVariable Long id) {
-        Optional<Form> formOptional = formRepository.findById(id);
-        if (formOptional.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
-
-        return ResponseEntity.ok(toFormResponse(formOptional.get()));
+        return formRepository.findById(id)
+                .map(form -> ResponseEntity.ok(FormResponse.from(form)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
 
     // Aggregated answers for a form. Public when form.responsesPublic is true (anyone with
@@ -225,29 +192,21 @@ public class FormController {
         }
 
         Form form = formOptional.get();
-        Optional<User> userOptional = resolveAuthenticatedUser();
+        Optional<User> userOptional = currentUserService.get();
         if (!formAccessService.canViewResponses(form, userOptional)) {
             if (formAccessService.adminBlockedFromResponses(form, userOptional)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of("error", "Administrators cannot view survey responses"));
             }
-            if (!form.isResponsesPublic()) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(Map.of("error", "Responses for this survey are private"));
-            }
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("error", "Not allowed to view these responses"));
+                    .body(Map.of("error", "Responses for this survey are private"));
         }
 
-        List<Answer> savedAnswers = answerRepository.findAllByQuestionFormIdOrderByIdAsc(id);
-        Map<Long, List<String>> answersByQuestionId = new LinkedHashMap<>();
-
-        for (Answer savedAnswer : savedAnswers) {
-            Question question = savedAnswer.getQuestion();
-            if (question == null || question.getId() == null) continue;
+        Map<Long, List<String>> answersByQuestionId = new HashMap<>();
+        for (AnswerRepository.QuestionAnswer saved : answerRepository.findQuestionAnswersByFormId(id)) {
             answersByQuestionId
-                    .computeIfAbsent(question.getId(), key -> new ArrayList<>())
-                    .add(savedAnswer.getAnswer());
+                    .computeIfAbsent(saved.getQuestionId(), key -> new ArrayList<>())
+                    .add(saved.getAnswer());
         }
 
         List<QuestionResultsResponse> questionResults = new ArrayList<>();
@@ -257,7 +216,7 @@ public class FormController {
                     question.getQuestionText(),
                     question.getQuestionType(),
                     question.getQuestionOptions(),
-                    answersByQuestionId.getOrDefault(question.getId(), new ArrayList<>())
+                    answersByQuestionId.getOrDefault(question.getId(), List.of())
             ));
         }
 
@@ -285,9 +244,7 @@ public class FormController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         Form form = formOptional.get();
-        boolean hasUploadQuestions = form.getQuestions().stream()
-                .anyMatch(q -> q.getQuestionType() != null && q.getQuestionType() == QuestionType.IMAGE_UPLOAD);
-        if (hasUploadQuestions) {
+        if (form.hasImageUploadQuestions()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Use POST /forms/{id}/staging/{stagingId}/commit for this survey"));
         }
@@ -296,27 +253,19 @@ public class FormController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
 
-        // Resolve every AnswerRequest into a real Question first (and validate it) before
-        // saving anything, so a single bad questionId rejects the whole submission instead
-        // of partially saving answers.
+        // Resolve every AnswerRequest into one of this form's Questions first (and validate it)
+        // before saving anything, so a single bad questionId - unknown, or belonging to a
+        // different form than the one in the URL - rejects the whole submission instead of
+        // partially saving answers.
+        Map<Long, Question> questionsById = form.questionsById();
         List<Answer> answersToSave = new ArrayList<>();
         for (AnswerRequest answerRequest : submissionRequest.getAnswers()) {
             if (answerRequest.getQuestionId() == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
-            Optional<Question> questionOptional = questionRepository.findById(answerRequest.getQuestionId());
-            if (questionOptional.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            Question question = questionOptional.get();
-
-            // Guard against a client submitting an answer for a question that belongs to a
-            // different form than the one in the URL (e.g. copy-pasted/forged questionId).
-            if (question.getForm() == null || !question.getForm().getId().equals(id)) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
-            }
-            if (question.getQuestionType() != null && question.getQuestionType() == QuestionType.IMAGE_UPLOAD) {
+            Question question = questionsById.get(answerRequest.getQuestionId());
+            if (question == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
             }
 
@@ -327,22 +276,12 @@ public class FormController {
         }
 
         List<Answer> savedAnswers = answerRepository.saveAll(answersToSave);
-
-        List<AnswerResponse> answerResponses = new ArrayList<>();
-        for (Answer savedAnswer : savedAnswers) {
-            answerResponses.add(new AnswerResponse(
-                    savedAnswer.getId(),
-                    savedAnswer.getQuestion().getId(),
-                    savedAnswer.getAnswer()
-            ));
-        }
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(answerResponses);
+        return ResponseEntity.status(HttpStatus.CREATED).body(AnswerResponse.fromAll(savedAnswers));
     }
 
     @DeleteMapping("/forms/{id}")
     public ResponseEntity<?> deleteForm(@PathVariable Long id) {
-        Optional<User> userOptional = resolveAuthenticatedUser();
+        Optional<User> userOptional = currentUserService.get();
         if (userOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -366,14 +305,6 @@ public class FormController {
         }
         formRepository.delete(form);
         return ResponseEntity.noContent().build();
-    }
-
-    private Optional<User> resolveAuthenticatedUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return Optional.empty();
-        }
-        return userRepository.findByUsername(authentication.getName());
     }
 
     // Returns empty when valid; otherwise a ready-to-return error ResponseEntity.
@@ -411,31 +342,26 @@ public class FormController {
         return Optional.empty();
     }
 
-    private void applyQuestionFields(Question question, QuestionRequest questionRequest) {
+    private static List<QuestionRequest> questionRequestsOf(FormRequest formRequest) {
+        return formRequest.getQuestions() != null ? formRequest.getQuestions() : List.of();
+    }
+
+    // responsesPublic defaults to true when the client omits it.
+    private static void applyFormFields(Form form, FormRequest formRequest) {
+        form.setName(formRequest.getName());
+        form.setResponsesPublic(formRequest.getResponsesPublic() == null || formRequest.getResponsesPublic());
+    }
+
+    private static Question newQuestion(Form form, QuestionRequest questionRequest) {
+        Question question = new Question();
+        applyQuestionFields(question, questionRequest);
+        question.setForm(form);
+        return question;
+    }
+
+    private static void applyQuestionFields(Question question, QuestionRequest questionRequest) {
         question.setQuestionText(questionRequest.getQuestionText());
         question.setQuestionType(questionRequest.getQuestionType());
         question.setQuestionOptions(questionRequest.getQuestionOptions());
-    }
-
-    // Shared mapping used by create/update/get so responses always have the same shape,
-    // including creatorUsername.
-    private FormResponse toFormResponse(Form form) {
-        List<QuestionResponse> questionResponses = new ArrayList<>();
-        for (Question question : form.getQuestions()) {
-            questionResponses.add(new QuestionResponse(
-                    question.getId(),
-                    question.getQuestionText(),
-                    question.getQuestionType(),
-                    question.getQuestionOptions()
-            ));
-        }
-
-        return new FormResponse(
-                form.getId(),
-                form.getName(),
-                form.isResponsesPublic(),
-                questionResponses,
-                form.getCreator().getUsername()
-        );
     }
 }

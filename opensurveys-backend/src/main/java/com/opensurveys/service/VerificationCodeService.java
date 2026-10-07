@@ -89,16 +89,16 @@ public class VerificationCodeService {
                 verificationCodeRepository.findByUserIdAndPurposeAndUsedFalseOrderByExpiresAtDesc(
                         user.getId(), purpose);
         Instant now = Instant.now();
+        String trimmedCode = plainCode.trim();
 
+        // Candidates are managed within this transaction, so setUsed(true) is flushed on commit.
         for (VerificationCode candidate : candidates) {
             if (candidate.getExpiresAt().isBefore(now)) {
                 candidate.setUsed(true);
-                verificationCodeRepository.save(candidate);
                 continue;
             }
-            if (passwordEncoder.matches(plainCode.trim(), candidate.getCodeHash())) {
+            if (passwordEncoder.matches(trimmedCode, candidate.getCodeHash())) {
                 candidate.setUsed(true);
-                verificationCodeRepository.save(candidate);
                 return true;
             }
         }

@@ -9,10 +9,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
-// A single answer to a Question. Brand-new entity introduced solely to match the provided
-// schema - no controller/endpoint submits or reads these yet (that's future work, e.g. a
-// form-submission flow like POST /forms/{id}/answers); this just establishes the
-// persistence shape so the DB structure matches what was specified.
+// A single answer to a Question. Written by FormController#submitAnswers and
+// FormSubmissionController#commitSubmission, read back for GET /forms/{id}/responses,
+// media access checks and the export.
 //
 // Maps onto the provided schema's ANSWER table:
 //   ANSWER(answer_id PK autoincrement, answer, QUESTION_question_id FK -> QUESTION.question_id)

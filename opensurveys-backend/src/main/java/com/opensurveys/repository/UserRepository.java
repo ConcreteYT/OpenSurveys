@@ -12,11 +12,20 @@ public interface UserRepository extends JpaRepository<User,Long> {
     //    the account to verify the password against.
     //  - JwtAuthFilter to resolve the username embedded in a validated JWT back into
     //    a User before populating the SecurityContext.
-    //  - FormController#createForm to resolve the authenticated principal's username
-    //    into the User that becomes the new Form's creator.
     Optional<User> findByUsername(String username);
+
+    boolean existsByUsername(String username);
 
     Optional<User> findByGoogleId(String googleId);
 
     Optional<User> findByEmailIgnoreCase(String email);
+
+    // Roles are always written uppercase (User.ROLE_USER / User.ROLE_ADMIN).
+    long countByRole(String role);
+
+    default boolean isUsernameTakenByOther(String username, Long userId) {
+        return findByUsername(username)
+                .map(existing -> !existing.getId().equals(userId))
+                .orElse(false);
+    }
 }

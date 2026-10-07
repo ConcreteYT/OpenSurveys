@@ -1,5 +1,6 @@
 package com.opensurveys.repository;
 
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.opensurveys.model.Form;
@@ -12,5 +13,7 @@ import java.util.List;
 // GET /forms (authenticated list of the caller's own surveys).
 public interface FormRepository extends JpaRepository<Form, Long> {
 
+    // Questions are fetched in the same query because every caller maps or cascades them.
+    @EntityGraph(attributePaths = "questions")
     List<Form> findByCreatorOrderByIdDesc(User creator);
 }

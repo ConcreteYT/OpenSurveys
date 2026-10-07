@@ -3,9 +3,7 @@ package com.opensurveys.controller;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,15 +18,14 @@ import com.opensurveys.dto.SendCodeRequest;
 import com.opensurveys.dto.UpdateEmailRequest;
 import com.opensurveys.dto.UpdatePasswordRequest;
 import com.opensurveys.dto.UpdateProfileRequest;
-import com.opensurveys.model.Form;
 import com.opensurveys.model.User;
 import com.opensurveys.model.VerificationCode;
-import com.opensurveys.repository.FormRepository;
 import com.opensurveys.repository.UserRepository;
 import com.opensurveys.security.JwtUtil;
+import com.opensurveys.service.CurrentUserService;
+import com.opensurveys.service.UserDeletionService;
 import com.opensurveys.service.VerificationCodeService;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -44,7 +41,10 @@ public class AccountController {
     private UserRepository userRepository;
 
     @Autowired
-    private FormRepository formRepository;
+    private CurrentUserService currentUserService;
+
+    @Autowired
+    private UserDeletionService userDeletionService;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -79,8 +79,7 @@ public class AccountController {
                     .body(Map.of("error", "username is required"));
         }
 
-        Optional<User> sameName = userRepository.findByUsername(newUsername);
-        if (sameName.isPresent() && !sameName.get().getId().equals(user.getId())) {
+        if (userRepository.isUsernameTakenByOther(newUsername, user.getId())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "username already taken"));
         }
@@ -186,7 +185,6 @@ public class AccountController {
     }
 
     @DeleteMapping
-    @Transactional
     public ResponseEntity<?> deleteAccount(@RequestBody DeleteAccountRequest request) {
         User user = currentUser();
         if (user == null) {
@@ -200,14 +198,12 @@ public class AccountController {
                     .body(Map.of("error", "username confirmation does not match"));
         }
 
-        if (User.ROLE_ADMIN.equals(user.getRole()) && countAdmins() <= 1) {
+        if (User.ROLE_ADMIN.equals(user.getRole()) && userRepository.countByRole(User.ROLE_ADMIN) <= 1) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "cannot delete the last admin"));
         }
 
-        List<Form> forms = formRepository.findByCreatorOrderByIdDesc(user);
-        formRepository.deleteAll(forms);
-        userRepository.delete(user);
+        userDeletionService.deleteUserAndForms(user);
         return ResponseEntity.noContent().build();
     }
 
@@ -250,11 +246,7 @@ public class AccountController {
     }
 
     private User currentUser() {
-        String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        if (username == null || username.isBlank() || "anonymousUser".equals(username)) {
-            return null;
-        }
-        return userRepository.findByUsername(username).orElse(null);
+        return currentUserService.get().orElse(null);
     }
 
     private AccountProfileResponse toProfile(User user, String token) {
@@ -268,12 +260,6 @@ public class AccountController {
         );
         response.setToken(token);
         return response;
-    }
-
-    private long countAdmins() {
-        return userRepository.findAll().stream()
-                .filter(u -> User.ROLE_ADMIN.equals(u.getRole()))
-                .count();
     }
 
     private static String normalizePurpose(String purpose) {

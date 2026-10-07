@@ -48,29 +48,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         // the chain unauthenticated; SecurityConfig's permitAll() rules allow that.
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
             String token = authHeader.substring(BEARER_PREFIX.length());
+            Optional<String> username = jwtUtil.parseUsername(token);
 
-            if (jwtUtil.isTokenValid(token)) {
-                String username = jwtUtil.extractUsername(token);
+            if (username.isPresent() && SecurityContextHolder.getContext().getAuthentication() == null) {
+                Optional<User> userOpt = userRepository.findByUsername(username.get());
 
-                if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                    Optional<User> userOpt = userRepository.findByUsername(username);
-
-                    if (userOpt.isPresent()) {
-                        // Principal is the plain username String (not the User entity) -
-                        // FormController later reads it back via
-                        // SecurityContextHolder.getContext().getAuthentication().getName()
-                        // to resolve the form creator.
-                        // Authority comes from User.role (USER/ADMIN) so SecurityConfig
-                        // can gate admin-only routes like GET /users.
-                        User user = userOpt.get();
-                        String authority = "ROLE_" + user.getRole();
-                        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                                username,
-                                null,
-                                List.of(new SimpleGrantedAuthority(authority))
-                        );
-                        SecurityContextHolder.getContext().setAuthentication(authToken);
-                    }
+                if (userOpt.isPresent()) {
+                    // Principal is the plain username String; the loaded User rides along as
+                    // the authentication details so CurrentUserService needn't query it again.
+                    // Authority comes from User.role (USER/ADMIN) so SecurityConfig
+                    // can gate admin-only routes like GET /users.
+                    User user = userOpt.get();
+                    String authority = "ROLE_" + user.getRole();
+                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                            username.get(),
+                            null,
+                            List.of(new SimpleGrantedAuthority(authority))
+                    );
+                    authToken.setDetails(user);
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
             // Invalid/expired token: silently fall through as unauthenticated rather than

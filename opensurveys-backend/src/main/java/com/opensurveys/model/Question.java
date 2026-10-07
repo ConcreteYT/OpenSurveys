@@ -56,9 +56,8 @@ public class Question {
     @JoinColumn(name = "FORM_form_id")
     private Form form;
 
-    // Inverse side of ANSWER.QUESTION_question_id. Not wired to any controller/endpoint yet -
-    // answer submission (e.g. a future POST /forms/{id}/answers route) is out of scope for
-    // now; this only establishes the persistence shape described by the schema.
+    // Inverse side of ANSWER.QUESTION_question_id. orphanRemoval means deleting a question
+    // (e.g. dropping it in FormController#updateForm) also deletes its answers.
     @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Answer> answers = new ArrayList<>();
 

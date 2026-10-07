@@ -68,3 +68,4 @@ file-docs/
 # Frontend build output served by Spring Boot (keep folder, ignore contents)
 opensurveys-backend/src/main/resources/static/**
 !opensurveys-backend/src/main/resources/static/.gitkeep
+hostinstructions.md

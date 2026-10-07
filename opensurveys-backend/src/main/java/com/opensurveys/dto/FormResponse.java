@@ -1,14 +1,34 @@
 package com.opensurveys.dto;
 
+import com.opensurveys.model.Form;
+
 import java.util.List;
 
-// Response body for both FormController endpoints (create and public get-by-id).
+// Response body for FormController's list/create/update/get endpoints.
 // creatorUsername is the key field for anonymous form-filling: it's populated from
 // Form.creator.getUsername() so a client can display "Created by <creatorUsername>"
 // at the top of the fill-out page without needing to be logged in itself.
 // `questions` mirrors Form.questions, mapped to QuestionResponse so the FK/back-reference
 // to the Form entity itself isn't serialized (avoids infinite recursion / leaking internals).
 public class FormResponse {
+
+    public static FormResponse from(Form form) {
+        List<QuestionResponse> questionResponses = form.getQuestions().stream()
+                .map(question -> new QuestionResponse(
+                        question.getId(),
+                        question.getQuestionText(),
+                        question.getQuestionType(),
+                        question.getQuestionOptions()))
+                .toList();
+
+        return new FormResponse(
+                form.getId(),
+                form.getName(),
+                form.isResponsesPublic(),
+                questionResponses,
+                form.getCreator().getUsername()
+        );
+    }
 
     private Long id;
     private String name;

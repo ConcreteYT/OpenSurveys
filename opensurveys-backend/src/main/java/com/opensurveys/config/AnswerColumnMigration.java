@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 /**
  * Hibernate ddl-auto=update often does not widen an existing ANSWER.answer column to TEXT.
  * Image upload commits store semicolon-separated filenames and need a wide column.
+ * The ALTER (which can rebuild the table) only runs when the column is not TEXT yet.
  */
 @Component
 public class AnswerColumnMigration {
@@ -25,7 +26,14 @@ public class AnswerColumnMigration {
     @EventListener(ApplicationReadyEvent.class)
     public void widenAnswerColumn() {
         try {
-            jdbcTemplate.execute("ALTER TABLE `ANSWER` MODIFY COLUMN `answer` TEXT");
+            String dataType = jdbcTemplate.queryForObject(
+                    "SELECT DATA_TYPE FROM information_schema.COLUMNS "
+                            + "WHERE TABLE_SCHEMA = DATABASE() AND UPPER(TABLE_NAME) = 'ANSWER' "
+                            + "AND LOWER(COLUMN_NAME) = 'answer'",
+                    String.class);
+            if (!"text".equalsIgnoreCase(dataType)) {
+                jdbcTemplate.execute("ALTER TABLE `ANSWER` MODIFY COLUMN `answer` TEXT");
+            }
             log.info("Ensured ANSWER.answer column is TEXT");
         } catch (Exception e) {
             log.warn("Could not alter ANSWER.answer to TEXT: {}", e.getMessage());

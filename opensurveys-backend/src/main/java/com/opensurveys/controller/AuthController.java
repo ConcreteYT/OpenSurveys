@@ -47,8 +47,7 @@ public class AuthController {
     // can go straight on to POST /forms without a separate login call.
     @PostMapping("/signup")
     public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
-        Optional<User> existing = userRepository.findByUsername(request.getUsername());
-        if (existing.isPresent()) {
+        if (userRepository.existsByUsername(request.getUsername())) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Map.of("error", "username already taken"));
         }
@@ -163,7 +162,7 @@ public class AuthController {
 
         String candidate = base;
         int suffix = 1;
-        while (userRepository.findByUsername(candidate).isPresent()) {
+        while (userRepository.existsByUsername(candidate)) {
             candidate = base + suffix;
             suffix++;
         }

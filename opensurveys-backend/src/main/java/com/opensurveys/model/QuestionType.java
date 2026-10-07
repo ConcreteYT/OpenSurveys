@@ -1,7 +1,6 @@
 package com.opensurveys.model;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,33 +51,31 @@ public final class QuestionType {
                 || type == IMAGE_UPLOAD);
     }
 
+    // Null-safe comparison of a stored (nullable) questionType against one of the codes above.
+    public static boolean is(Integer type, int code) {
+        return type != null && type == code;
+    }
+
     // Parses questionOptions for IMAGE_UPLOAD. Returns null if missing/invalid.
     public static Integer parseImageUploadMaxFiles(String questionOptions) {
-        if (questionOptions == null || questionOptions.isBlank()) {
-            return null;
-        }
-        try {
-            int max = Integer.parseInt(questionOptions.trim());
-            if (max < IMAGE_UPLOAD_MIN_FILES || max > IMAGE_UPLOAD_MAX_FILES) {
-                return null;
-            }
-            return max;
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return parseIntInRange(questionOptions, IMAGE_UPLOAD_MIN_FILES, IMAGE_UPLOAD_MAX_FILES);
     }
 
     // Parses questionOptions for RATING questions. Returns null if missing/invalid.
     public static Integer parseRatingMax(String questionOptions) {
+        return parseIntInRange(questionOptions, RATING_MAX_MIN, RATING_MAX_MAX);
+    }
+
+    private static Integer parseIntInRange(String questionOptions, int min, int max) {
         if (questionOptions == null || questionOptions.isBlank()) {
             return null;
         }
         try {
-            int max = Integer.parseInt(questionOptions.trim());
-            if (max < RATING_MAX_MIN || max > RATING_MAX_MAX) {
+            int value = Integer.parseInt(questionOptions.trim());
+            if (value < min || value > max) {
                 return null;
             }
-            return max;
+            return value;
         } catch (NumberFormatException e) {
             return null;
         }
@@ -118,7 +115,7 @@ public final class QuestionType {
             return null;
         }
 
-        return new MultipleChoiceSpec(List.copyOf(parts), selectCount);
+        return new MultipleChoiceSpec(parts, selectCount);
     }
 
     public static final class MultipleChoiceSpec {
@@ -126,12 +123,12 @@ public final class QuestionType {
         private final int selectCount;
 
         public MultipleChoiceSpec(List<String> options, int selectCount) {
-            this.options = options;
+            this.options = List.copyOf(options);
             this.selectCount = selectCount;
         }
 
         public List<String> getOptions() {
-            return Collections.unmodifiableList(options);
+            return options;
         }
 
         public int getSelectCount() {

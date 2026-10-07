@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -40,39 +40,41 @@ public class UploadStorageService {
         this.uploadRoot = Path.of(uploadDir).toAbsolutePath().normalize();
     }
 
-    public Path getUploadRoot() {
-        return uploadRoot;
-    }
-
     public void ensureRootExists() throws IOException {
         Files.createDirectories(uploadRoot);
     }
 
-    public Path stagingDirectory(long formId, String stagingId) {
+    private Path stagingDirectory(long formId, String stagingId) {
         validateStagingId(stagingId);
         return uploadRoot.resolve("staging").resolve(stagingId).resolve("form-" + formId);
     }
 
-    public Path questionStagingDirectory(long formId, String stagingId, long questionId) {
+    private Path questionStagingDirectory(long formId, String stagingId, long questionId) {
         return stagingDirectory(formId, stagingId).resolve("q-" + questionId);
     }
 
-    public Path formDirectory(long formId) {
+    private Path formDirectory(long formId) {
         return uploadRoot.resolve("forms").resolve(String.valueOf(formId));
     }
 
-    public Path resolveFormFile(long formId, String storedName) {
+    private Path resolveFormFile(long formId, String storedName) {
         validateStoredFileName(storedName);
         return formDirectory(formId).resolve(storedName).normalize();
     }
 
-    public boolean formFileExists(long formId, String storedName) {
+    /**
+     * @return the stored file's path, or empty if the name is invalid or no such file exists for this form
+     */
+    public Optional<Path> findFormFile(long formId, String storedName) {
         try {
             Path resolved = resolveFormFile(formId, storedName);
-            return resolved.startsWith(formDirectory(formId)) && Files.isRegularFile(resolved);
-        } catch (IllegalArgumentException e) {
-            return false;
+            if (resolved.startsWith(formDirectory(formId)) && Files.isRegularFile(resolved)) {
+                return Optional.of(resolved);
+            }
+        } catch (IllegalArgumentException ignored) {
+            // invalid name
         }
+        return Optional.empty();
     }
 
     /**
@@ -103,9 +105,7 @@ public class UploadStorageService {
         }
 
         Path questionDir = questionStagingDirectory(formId, stagingId, questionId);
-        if (Files.exists(questionDir)) {
-            deleteDirectoryRecursive(questionDir);
-        }
+        deleteDirectoryRecursive(questionDir);
         Files.createDirectories(questionDir);
 
         List<String> storedNames = new ArrayList<>();
@@ -130,45 +130,37 @@ public class UploadStorageService {
     }
 
     /**
-     * Moves staged files for one question into the form directory. Returns semicolon-separated stored names.
+     * Moves staged files for one question into the form directory.
+     *
+     * @return the moved stored names in sorted order; empty (and nothing moved) if none were staged
      */
-    public String moveStagedQuestionToFinal(long formId, String stagingId, long questionId) throws IOException {
+    public List<String> moveStagedQuestionToFinal(long formId, String stagingId, long questionId) throws IOException {
         List<String> staged = listStagedFileNames(formId, stagingId, questionId);
         if (staged.isEmpty()) {
-            throw new UploadValidationException("Missing staged files for question " + questionId);
+            return staged;
         }
 
         Path formDir = formDirectory(formId);
         Files.createDirectories(formDir);
         Path questionDir = questionStagingDirectory(formId, stagingId, questionId);
 
-        List<String> finalNames = new ArrayList<>();
         for (String name : staged) {
-            Path source = questionDir.resolve(name);
-            Path target = formDir.resolve(name);
-            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-            finalNames.add(name);
+            Files.move(questionDir.resolve(name), formDir.resolve(name), StandardCopyOption.REPLACE_EXISTING);
         }
-        return String.join(";", finalNames);
+        return staged;
     }
 
     public void deleteStagingSession(String stagingId) {
         try {
             validateStagingId(stagingId);
-            Path sessionRoot = uploadRoot.resolve("staging").resolve(stagingId);
-            if (Files.exists(sessionRoot)) {
-                deleteDirectoryRecursive(sessionRoot);
-            }
+            deleteDirectoryRecursive(uploadRoot.resolve("staging").resolve(stagingId));
         } catch (IOException | IllegalArgumentException ignored) {
             // best-effort cleanup
         }
     }
 
     public void deleteFormUploads(long formId) throws IOException {
-        Path formDir = formDirectory(formId);
-        if (Files.exists(formDir)) {
-            deleteDirectoryRecursive(formDir);
-        }
+        deleteDirectoryRecursive(formDirectory(formId));
     }
 
     public void rollbackMovedFiles(long formId, List<String> storedNames) {

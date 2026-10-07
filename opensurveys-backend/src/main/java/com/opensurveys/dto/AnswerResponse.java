@@ -1,10 +1,23 @@
 package com.opensurveys.dto;
 
-// One saved answer, returned by FormController#submitAnswers as confirmation of what was
-// persisted to the ANSWER table. Mirrors Answer's non-relationship field (answer text) plus
-// the generated id and the questionId it was linked to, so the client can double check
-// every submitted answer was stored against the question it intended.
+import com.opensurveys.model.Answer;
+
+import java.util.List;
+
+// One saved answer, returned by FormController#submitAnswers and
+// FormSubmissionController#commitSubmission as confirmation of what was persisted to the
+// ANSWER table. Mirrors Answer's non-relationship field (answer text) plus the generated id
+// and the questionId it was linked to, so the client can double check every submitted
+// answer was stored against the question it intended.
 public class AnswerResponse {
+
+    public static AnswerResponse from(Answer answer) {
+        return new AnswerResponse(answer.getId(), answer.getQuestion().getId(), answer.getAnswer());
+    }
+
+    public static List<AnswerResponse> fromAll(List<Answer> answers) {
+        return answers.stream().map(AnswerResponse::from).toList();
+    }
 
     private Long id;
     private Long questionId;
