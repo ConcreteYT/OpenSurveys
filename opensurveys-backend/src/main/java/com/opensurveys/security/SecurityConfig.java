@@ -2,6 +2,7 @@ package com.opensurveys.security;
 
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,6 +17,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 // Single source of truth for which routes need a signed-in user. This is what actually
@@ -103,12 +105,17 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // Origins allowed to call this API from a browser. Add the deployed frontend's URL
-    // here too once it's hosted somewhere other than localhost.
+    // Origins allowed to call this API from a browser. A POST from any other origin
+    // is rejected with 403 before the controller runs. The list is CORS_ALLOWED_ORIGINS
+    // in .env (comma-separated), via app.cors.allowed-origins.
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origins}") String allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
 

@@ -297,6 +297,7 @@ Edit `opensurveys-backend/.env` and set at least:
 | `JWT_SECRET`                                | A long random secret string                                                         |
 | `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD` | Local admin login (username defaults to `admin`)                                    |
 | `GOOGLE_CLIENT_ID`                          | Google Cloud **Web** OAuth client ID (needed for Google Sign-In)                    |
+| `CORS_ALLOWED_ORIGINS`                      | Comma-separated browser origins. Local: `http://localhost:3000`. Production: `https://opensurveys.de,https://www.opensurveys.de` |
 | `MAIL_*` / `MAIL_FROM`                      | SMTP settings (needed for email verification flows)                                 |
 
 
