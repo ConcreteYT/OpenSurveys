@@ -62,7 +62,7 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/home", "/auth/login", "/auth/signup", "/user-view", "/login-home",
-                                "/surveys", "/admin", "/editor", "/editor/*", "/settings")
+                                "/surveys", "/admin", "/editor", "/editor/*", "/settings", "/access")
                         .permitAll()
                         // AuthController: account creation and sign-in must be reachable without a token.
                         // Path must match AuthController's actual @PostMapping("/signup"), not "/register".

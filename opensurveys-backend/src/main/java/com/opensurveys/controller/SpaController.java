@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class SpaController {
 
     @GetMapping({"/home", "/auth/login", "/auth/signup", "/user-view", "/login-home", "/surveys",
-            "/admin", "/editor", "/editor/{id}", "/settings"})
+            "/admin", "/editor", "/editor/{id}", "/settings", "/access"})
     public String spaRoutes() {
         return "forward:/index.html";
     }
