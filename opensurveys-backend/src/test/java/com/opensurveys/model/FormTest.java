@@ -19,6 +19,11 @@ class FormTest {
     }
 
     @Test
+    void oneResponseOnlyDefaultsToTrue() {
+        assertTrue(new Form().isOneResponseOnly());
+    }
+
+    @Test
     void hasImageUploadQuestions() {
         Form form = new Form();
         assertFalse(form.hasImageUploadQuestions());

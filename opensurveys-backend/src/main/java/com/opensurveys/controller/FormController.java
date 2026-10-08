@@ -346,10 +346,11 @@ public class FormController {
         return formRequest.getQuestions() != null ? formRequest.getQuestions() : List.of();
     }
 
-    // responsesPublic defaults to true when the client omits it.
+    // responsesPublic and oneResponseOnly default to true when the client omits them.
     private static void applyFormFields(Form form, FormRequest formRequest) {
         form.setName(formRequest.getName());
         form.setResponsesPublic(formRequest.getResponsesPublic() == null || formRequest.getResponsesPublic());
+        form.setOneResponseOnly(formRequest.getOneResponseOnly() == null || formRequest.getOneResponseOnly());
     }
 
     private static Question newQuestion(Form form, QuestionRequest questionRequest) {

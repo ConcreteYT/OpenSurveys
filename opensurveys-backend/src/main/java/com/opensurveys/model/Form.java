@@ -46,6 +46,12 @@ public class Form {
     @Column(name = "responses_public", nullable = false)
     private boolean responsesPublic = true;
 
+    // When true (default), the fill page treats a completed survey in this browser as finished.
+    // When false, the thank-you screen offers another response from the same browser.
+    @ColumnDefault("true")
+    @Column(name = "one_response_only", nullable = false)
+    private boolean oneResponseOnly = true;
+
     // FK column USER_user_id on FORM, pointing at whoever created this form.
     // Never null for forms created via the API (FormController rejects unauthenticated
     // create attempts before a Form is ever built).
@@ -83,6 +89,14 @@ public class Form {
 
     public void setResponsesPublic(boolean responsesPublic) {
         this.responsesPublic = responsesPublic;
+    }
+
+    public boolean isOneResponseOnly() {
+        return oneResponseOnly;
+    }
+
+    public void setOneResponseOnly(boolean oneResponseOnly) {
+        this.oneResponseOnly = oneResponseOnly;
     }
 
     public User getCreator() {

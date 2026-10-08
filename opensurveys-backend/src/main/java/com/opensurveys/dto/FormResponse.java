@@ -25,6 +25,7 @@ public class FormResponse {
                 form.getId(),
                 form.getName(),
                 form.isResponsesPublic(),
+                form.isOneResponseOnly(),
                 questionResponses,
                 form.getCreator().getUsername()
         );
@@ -33,17 +34,19 @@ public class FormResponse {
     private Long id;
     private String name;
     private boolean responsesPublic;
+    private boolean oneResponseOnly;
     private List<QuestionResponse> questions;
     private String creatorUsername;
 
     public FormResponse() {
     }
 
-    public FormResponse(Long id, String name, boolean responsesPublic,
+    public FormResponse(Long id, String name, boolean responsesPublic, boolean oneResponseOnly,
                         List<QuestionResponse> questions, String creatorUsername) {
         this.id = id;
         this.name = name;
         this.responsesPublic = responsesPublic;
+        this.oneResponseOnly = oneResponseOnly;
         this.questions = questions;
         this.creatorUsername = creatorUsername;
     }
@@ -70,6 +73,14 @@ public class FormResponse {
 
     public void setResponsesPublic(boolean responsesPublic) {
         this.responsesPublic = responsesPublic;
+    }
+
+    public boolean isOneResponseOnly() {
+        return oneResponseOnly;
+    }
+
+    public void setOneResponseOnly(boolean oneResponseOnly) {
+        this.oneResponseOnly = oneResponseOnly;
     }
 
     public List<QuestionResponse> getQuestions() {

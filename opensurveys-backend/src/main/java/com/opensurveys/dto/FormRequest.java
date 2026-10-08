@@ -10,6 +10,8 @@ public class FormRequest {
     private String name;
     // Null means "use default" (true on create) so older clients keep public responses.
     private Boolean responsesPublic;
+    // Null means "use default" (true) so older clients keep one response per browser.
+    private Boolean oneResponseOnly;
     private List<QuestionRequest> questions;
 
     public String getName() {
@@ -26,6 +28,14 @@ public class FormRequest {
 
     public void setResponsesPublic(Boolean responsesPublic) {
         this.responsesPublic = responsesPublic;
+    }
+
+    public Boolean getOneResponseOnly() {
+        return oneResponseOnly;
+    }
+
+    public void setOneResponseOnly(Boolean oneResponseOnly) {
+        this.oneResponseOnly = oneResponseOnly;
     }
 
     public List<QuestionRequest> getQuestions() {

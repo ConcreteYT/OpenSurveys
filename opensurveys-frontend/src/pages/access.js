@@ -3,7 +3,9 @@
  *
  * Modes:
  * - Default: step through questions (text / MCQ / rating / skippable), submit answers,
- *   and mark completion in localStorage so the same browser cannot resubmit.
+ *   and mark completion in localStorage. Surveys with oneResponseOnly (the default)
+ *   cannot be resubmitted from this browser. When that flag is off, the thank-you
+ *   screen offers another response.
  * - `?view=responses`: show aggregated answer charts/percentages for the form.
  *
  * Question-type encoding must stay in sync with backend QuestionType.java.
@@ -224,8 +226,8 @@ function buildRatingResults(questionOptions, answers) {
 
 // Survey fill-out page: loads a form by id, walks through every question one by one,
 // supports display-only text / typed text / multiple choice / star rating, submits all
-// answers at the end, then shows a thank-you screen so the survey cannot be answered
-// again from this browser.
+// answers at the end, then shows a thank-you screen. oneResponseOnly surveys stay
+// finished in this browser; others can start again from that screen.
 export default function Access() {
   const t = useT()
   const navigate = useNavigate()
@@ -401,6 +403,23 @@ export default function Access() {
     }
     setPendingUploadFiles(uploadFilesByQuestion[question.id] || [])
   }, [question, questionType, uploadFilesByQuestion])
+
+  const startAnotherResponse = () => {
+    setIsCompleted(false)
+    setIsViewingResponses(false)
+    setIsFinalizing(false)
+    setIsSubmitting(false)
+    setCurrentIndex(0)
+    setAnswers({})
+    setAnswer('')
+    setSelectedChoices([])
+    setError('')
+    setResponsesData(null)
+    setResponsesIndex(0)
+    setUploadFilesByQuestion({})
+    setPendingUploadFiles([])
+    setUploadProgress(null)
+  }
 
   const finishSurvey = async (allAnswers, uploadFilesMap = uploadFilesByQuestion) => {
     const answerList = Object.entries(allAnswers).map(([questionId, value]) => ({
@@ -1007,16 +1026,27 @@ export default function Access() {
                             <p className="text-muted mb-0">
                               {t('access.thankYouClose')}
                             </p>
-                            {form?.responsesPublic !== false && (
-                              <div className="d-flex justify-content-center mt-4">
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-primary"
-                                  onClick={openResponses}
-                                  disabled={isLoadingResponses}
-                                >
-                                  {t('access.viewResponses')}
-                                </button>
+                            {(form?.responsesPublic !== false || form?.oneResponseOnly === false) && (
+                              <div className="d-flex flex-wrap justify-content-center gap-2 mt-4">
+                                {form?.oneResponseOnly === false && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={startAnotherResponse}
+                                  >
+                                    {t('access.submitAnother')}
+                                  </button>
+                                )}
+                                {form?.responsesPublic !== false && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-primary"
+                                    onClick={openResponses}
+                                    disabled={isLoadingResponses}
+                                  >
+                                    {t('access.viewResponses')}
+                                  </button>
+                                )}
                               </div>
                             )}
                             {form?.responsesPublic === false && (

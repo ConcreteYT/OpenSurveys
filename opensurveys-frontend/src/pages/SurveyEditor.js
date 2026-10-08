@@ -174,10 +174,11 @@ function validateDraft(name, questions, t) {
   return ''
 }
 
-function toApiPayload(name, questions, responsesPublic) {
+function toApiPayload(name, questions, responsesPublic, oneResponseOnly) {
   return {
     name: name.trim(),
     responsesPublic: Boolean(responsesPublic),
+    oneResponseOnly: Boolean(oneResponseOnly),
     questions: questions.map((q) => {
       const payload = {
         questionText: q.questionText.trim(),
@@ -198,6 +199,7 @@ export default function SurveyEditor() {
 
   const [name, setName] = useState('')
   const [responsesPublic, setResponsesPublic] = useState(true)
+  const [oneResponseOnly, setOneResponseOnly] = useState(true)
   const [questions, setQuestions] = useState([emptyQuestion()])
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
@@ -229,6 +231,7 @@ export default function SurveyEditor() {
 
         setName(form.name || '')
         setResponsesPublic(form.responsesPublic !== false)
+        setOneResponseOnly(form.oneResponseOnly !== false)
         const loaded = Array.isArray(form.questions) ? form.questions.map(questionFromApi) : []
         setQuestions(loaded.length > 0 ? loaded : [emptyQuestion()])
       } catch (err) {
@@ -332,7 +335,7 @@ export default function SurveyEditor() {
     setSaving(true)
     setError('')
     try {
-      const payload = toApiPayload(name, questions, responsesPublic)
+      const payload = toApiPayload(name, questions, responsesPublic, oneResponseOnly)
       if (isEdit) {
         await api.updateForm(formId, payload)
       } else {
@@ -452,6 +455,28 @@ export default function SurveyEditor() {
                       {responsesPublic
                         ? t('editor.responsesPublicHelp')
                         : t('editor.responsesPrivateHelp')}
+                    </p>
+                  </div>
+
+                  <div className="mb-4">
+                    <div className="form-check form-switch">
+                      <input
+                        id="one-response-only"
+                        className="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        checked={oneResponseOnly}
+                        onChange={(e) => setOneResponseOnly(e.target.checked)}
+                        disabled={saving}
+                      />
+                      <label className="form-check-label fw-semibold" htmlFor="one-response-only">
+                        <T k="editor.oneResponseOnly" />
+                      </label>
+                    </div>
+                    <p className="form-text text-muted mb-0 mt-1">
+                      {oneResponseOnly
+                        ? t('editor.oneResponseOnlyHelp')
+                        : t('editor.oneResponseOnlyOffHelp')}
                     </p>
                   </div>
 
