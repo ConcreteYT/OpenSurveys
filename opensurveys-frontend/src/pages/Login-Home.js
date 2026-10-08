@@ -98,7 +98,7 @@ export default function Home() {
 
               <div className="col-lg-5 position-relative">
                 <div className="card bg-glass welcome-card p-3 p-md-5 position-relative">
-                  <h2 className="fw-bold mb-3 section-heading">
+                  <h2 className="fw-bold mb-3 section-heading text-center">
                     <T k="dashboard.nextTitle" />
                   </h2>
                   <ul className="list-unstyled text-muted mb-0">
