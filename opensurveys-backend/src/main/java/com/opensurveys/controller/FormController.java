@@ -1,6 +1,7 @@
 package com.opensurveys.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.opensurveys.service.AccessCodes;
 import com.opensurveys.service.CurrentUserService;
 import com.opensurveys.service.FormAccessService;
 import com.opensurveys.service.UploadStorageService;
@@ -32,6 +34,7 @@ import com.opensurveys.repository.AnswerRepository;
 import com.opensurveys.repository.FormRepository;
 
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -62,6 +65,8 @@ public class FormController {
 
     @Autowired
     private UploadStorageService uploadStorageService;
+
+    private final SecureRandom secureRandom = new SecureRandom();
 
     // Requires auth. Returns only forms created by the JWT principal (newest first).
     @GetMapping("/forms")
@@ -106,7 +111,7 @@ public class FormController {
             form.getQuestions().add(newQuestion(form, questionRequest));
         }
 
-        Form savedForm = formRepository.save(form);
+        Form savedForm = saveNewForm(form);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(FormResponse.from(savedForm));
     }
@@ -174,6 +179,20 @@ public class FormController {
     // Public/anonymous - no token required (see SecurityConfig permitAll for GET /forms/**).
     // This is the endpoint a form-filling page calls; the returned creatorUsername is what
     // lets the frontend show "Created by <username>" at the top of the fill-out view.
+    // Public lookup by the 8-digit access code. The numeric id in the response is what
+    // /access?formId= and the editor keep using. /forms/{id} cannot capture this path:
+    // that variable is a Long, and this mapping has an extra segment.
+    @GetMapping("/forms/by-code/{accessCode}")
+    public ResponseEntity<?> getFormByAccessCode(@PathVariable String accessCode) {
+        if (!AccessCodes.isValid(accessCode)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Access code must be exactly 8 digits"));
+        }
+        return formRepository.findByAccessCode(accessCode)
+                .map(form -> ResponseEntity.ok(FormResponse.from(form)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+    }
+
     @GetMapping("/forms/{id}")
     public ResponseEntity<FormResponse> getForm(@PathVariable Long id) {
         return formRepository.findById(id)
@@ -305,6 +324,32 @@ public class FormController {
         }
         formRepository.delete(form);
         return ResponseEntity.noContent().build();
+    }
+
+    // Retries when the generated code is already taken or the unique constraint rejects the insert.
+    private Form saveNewForm(Form form) {
+        for (int attempt = 0; attempt < AccessCodes.MAX_ATTEMPTS; attempt++) {
+            String code = AccessCodes.generate(secureRandom);
+            if (formRepository.findByAccessCode(code).isPresent()) {
+                continue;
+            }
+            form.setAccessCode(code);
+            try {
+                return formRepository.save(form);
+            } catch (DataIntegrityViolationException ex) {
+                form.setAccessCode(null);
+                if (form.getId() != null) {
+                    form.setId(null);
+                    for (Question question : form.getQuestions()) {
+                        question.setId(null);
+                    }
+                }
+                if (attempt == AccessCodes.MAX_ATTEMPTS - 1) {
+                    throw ex;
+                }
+            }
+        }
+        throw new IllegalStateException("Could not allocate a unique access code");
     }
 
     // Returns empty when valid; otherwise a ready-to-return error ResponseEntity.

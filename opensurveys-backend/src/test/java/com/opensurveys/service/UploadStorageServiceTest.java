@@ -8,6 +8,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -104,5 +106,46 @@ class UploadStorageServiceTest {
         assertEquals(List.of("a.png", "b.png"), UploadStorageService.splitAnswerFileNames(" a.png ;; b.png;"));
         assertTrue(UploadStorageService.splitAnswerFileNames(null).isEmpty());
         assertTrue(UploadStorageService.splitAnswerFileNames(" ").isEmpty());
+    }
+
+    @Test
+    void finalImageFileNameUsesCommitTimeAnswerIdAndIndex() {
+        LocalDateTime committedAt = LocalDateTime.of(2026, 10, 12, 10, 34, 5);
+        String name = UploadStorageService.finalImageFileName(committedAt, 17, 1, "jpg");
+        assertEquals("2026-10-12-10-34-05-17-1.jpg", name);
+        assertEquals(
+                "2026-01-02-03-04-05-8-2.png",
+                UploadStorageService.finalImageFileName(LocalDateTime.of(2026, 1, 2, 3, 4, 5), 8, 2, "png"));
+        UploadStorageService.validateStoredFileName(name);
+        assertEquals(
+                List.of(name, "2026-10-12-10-34-05-17-2.jpeg"),
+                UploadStorageService.splitAnswerFileNames(name + ";2026-10-12-10-34-05-17-2.jpeg"));
+    }
+
+    @Test
+    void renameCommittedImagesReplacesStoredNames() throws IOException {
+        UploadStorageService service = new UploadStorageService(root.toString());
+        String stagingId = UUID.randomUUID().toString();
+        service.stageQuestionFiles(5, stagingId, 9, 2, List.of(png("a.jpg"), png("b.png")));
+        List<String> moved = service.moveStagedQuestionToFinal(5, stagingId, 9);
+        List<String> rollback = new ArrayList<>(moved);
+        LocalDateTime committedAt = LocalDateTime.of(2026, 10, 12, 10, 34, 5);
+
+        List<String> renamed = service.renameCommittedImages(5, moved, 17, committedAt, rollback);
+
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < moved.size(); i++) {
+            String oldName = moved.get(i);
+            String extension = oldName.substring(oldName.lastIndexOf('.') + 1);
+            expected.add(UploadStorageService.finalImageFileName(committedAt, 17, i + 1, extension));
+        }
+        assertEquals(expected, renamed);
+        assertEquals(expected, rollback);
+        for (String oldName : moved) {
+            assertTrue(service.findFormFile(5, oldName).isEmpty());
+        }
+        for (String name : renamed) {
+            assertTrue(service.findFormFile(5, name).isPresent());
+        }
     }
 }

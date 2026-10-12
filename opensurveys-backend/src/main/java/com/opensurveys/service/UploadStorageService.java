@@ -14,6 +14,8 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -26,6 +28,8 @@ import java.util.stream.Stream;
 @Service
 public class UploadStorageService {
 
+    private static final DateTimeFormatter COMMITTED_IMAGE_TIMESTAMP =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss");
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
             "image/jpeg",
@@ -148,6 +152,51 @@ public class UploadStorageService {
             Files.move(questionDir.resolve(name), formDir.resolve(name), StandardCopyOption.REPLACE_EXISTING);
         }
         return staged;
+    }
+
+    /**
+     * Final stored name: {@code yyyy-MM-dd-HH-mm-ss-{answerId}-{index}.{extension}}.
+     * {@code index} is 1-based among the files of that answer.
+     */
+    public static String finalImageFileName(LocalDateTime committedAt, long answerId, int index, String extension) {
+        return COMMITTED_IMAGE_TIMESTAMP.format(committedAt) + "-" + answerId + "-" + index + "." + extension;
+    }
+
+    /**
+     * Renames files already moved into the form directory. {@code rollbackNames} is updated
+     * in place so a later failure deletes the names currently on disk.
+     */
+    public List<String> renameCommittedImages(
+            long formId,
+            List<String> storedNames,
+            long answerId,
+            LocalDateTime committedAt,
+            List<String> rollbackNames
+    ) throws IOException {
+        List<String> renamed = new ArrayList<>();
+        Path formDir = formDirectory(formId);
+        for (int i = 0; i < storedNames.size(); i++) {
+            String oldName = storedNames.get(i);
+            validateStoredFileName(oldName);
+            String extension = extensionFromFilename(oldName);
+            if (!ALLOWED_EXTENSIONS.contains(extension)) {
+                throw new IOException("Stored file has no allowed extension");
+            }
+            String newName = finalImageFileName(committedAt, answerId, i + 1, extension);
+            validateStoredFileName(newName);
+            Path source = formDir.resolve(oldName).normalize();
+            Path target = formDir.resolve(newName).normalize();
+            if (!source.startsWith(formDir) || !target.startsWith(formDir)) {
+                throw new IOException("Invalid stored path");
+            }
+            Files.move(source, target);
+            int rollbackIndex = rollbackNames.indexOf(oldName);
+            if (rollbackIndex >= 0) {
+                rollbackNames.set(rollbackIndex, newName);
+            }
+            renamed.add(newName);
+        }
+        return renamed;
     }
 
     public void deleteStagingSession(String stagingId) {

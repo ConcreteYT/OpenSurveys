@@ -40,6 +40,12 @@ public class Form {
     @Column(name = "name")
     private String name;
 
+    // 8-digit public code, stored as text so leading zeros survive. Nullable because
+    // ddl-auto=update adds the column before AccessCodeBackfill fills existing rows;
+    // a NOT NULL column would fail that startup. FormController always sets it on create.
+    @Column(name = "access_code", length = 8, unique = true, nullable = true)
+    private String accessCode;
+
     // When true (default), anyone with the form id can load aggregated answers via
     // GET /forms/{id}/responses. When false, only the form's creator may view responses.
     @ColumnDefault("true")
@@ -81,6 +87,14 @@ public class Form {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getAccessCode() {
+        return accessCode;
+    }
+
+    public void setAccessCode(String accessCode) {
+        this.accessCode = accessCode;
     }
 
     public boolean isResponsesPublic() {

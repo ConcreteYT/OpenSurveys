@@ -76,6 +76,8 @@ public class SecurityConfig {
                         // FormController#getForm: anonymous users fetch a form (and its
                         // creator's username) to fill it out, so this must stay public.
                         // Use /forms/* (one path segment) so GET /forms (list mine) is not public.
+                        // /forms/by-code/{code} is two extra segments, so /forms/* does not cover it.
+                        .requestMatchers(HttpMethod.GET, "/forms/by-code/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/forms/*").permitAll()
                         // FormController#submitAnswers: whoever filled the form out anonymously
                         // (via the GET above) must be able to submit their answers without a

@@ -23,6 +23,7 @@ public class FormResponse {
 
         return new FormResponse(
                 form.getId(),
+                form.getAccessCode(),
                 form.getName(),
                 form.isResponsesPublic(),
                 form.isOneResponseOnly(),
@@ -32,6 +33,7 @@ public class FormResponse {
     }
 
     private Long id;
+    private String accessCode;
     private String name;
     private boolean responsesPublic;
     private boolean oneResponseOnly;
@@ -41,9 +43,10 @@ public class FormResponse {
     public FormResponse() {
     }
 
-    public FormResponse(Long id, String name, boolean responsesPublic, boolean oneResponseOnly,
+    public FormResponse(Long id, String accessCode, String name, boolean responsesPublic, boolean oneResponseOnly,
                         List<QuestionResponse> questions, String creatorUsername) {
         this.id = id;
+        this.accessCode = accessCode;
         this.name = name;
         this.responsesPublic = responsesPublic;
         this.oneResponseOnly = oneResponseOnly;
@@ -57,6 +60,14 @@ public class FormResponse {
 
     public void setId(Long id) {
         this.id = id;
+    }
+
+    public String getAccessCode() {
+        return accessCode;
+    }
+
+    public void setAccessCode(String accessCode) {
+        this.accessCode = accessCode;
     }
 
     public String getName() {

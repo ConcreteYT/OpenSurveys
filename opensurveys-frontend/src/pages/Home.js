@@ -23,28 +23,25 @@ export default function Home() {
     if (inputsRef.current[0]) inputsRef.current[0].focus()
   }, [])
 
-  /** Joins digit boxes into a form id, verifies via API, then opens the survey. */
+  /** Joins the 8 digit boxes, looks the survey up by that code, then opens it by numeric id. */
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
 
-    const code = digits.join('').trim()
+    const code = digits.join('')
     if (!code) {
       setError(t('home.errorEmpty'))
       return
     }
-
-    // Access codes are the form id (leading zeros allowed, e.g. 00000004 → 4).
-    const formId = Number.parseInt(code, 10)
-    if (!Number.isFinite(formId) || formId <= 0) {
+    if (!/^\d{8}$/.test(code)) {
       setError(t('home.errorInvalid'))
       return
     }
 
     setIsChecking(true)
     try {
-      await api.getForm(formId)
-      navigate(`/access?formId=${formId}`)
+      const form = await api.getFormByAccessCode(code)
+      navigate(`/access?formId=${form.id}`)
     } catch (err) {
       const message = err?.message || ''
       if (/not found|404/i.test(message)) {

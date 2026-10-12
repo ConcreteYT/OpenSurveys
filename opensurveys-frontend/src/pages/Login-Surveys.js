@@ -1,17 +1,12 @@
 /**
  * Authenticated "Your surveys" page (`/surveys`).
- * Lists forms owned by the logged-in user, shows zero-padded access codes,
+ * Lists forms owned by the logged-in user, shows each survey's access code,
  * and links to fill out (`/access`) or view aggregated results.
  */
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useT, T } from '../i18n'
-
-/** Form id as an 8-digit access code (e.g. 4 → "00000004"). */
-function formatAccessCode(formId) {
-  return String(formId).padStart(8, '0')
-}
 
 export default function LoginSurveys() {
   const navigate = useNavigate()
@@ -166,12 +161,11 @@ export default function LoginSurveys() {
                     <tbody>
                       {forms.map((form) => {
                         const questionCount = Array.isArray(form.questions) ? form.questions.length : 0
-                        const accessCode = formatAccessCode(form.id)
                         return (
                           <tr key={form.id}>
                             <td className="fw-semibold">{form.name || t('surveys.untitled')}</td>
                             <td>
-                              <span className="survey-access-code">{accessCode}</span>
+                              <span className="survey-access-code">{form.accessCode}</span>
                             </td>
                             <td>{questionCount}</td>
                             <td className="text-end">

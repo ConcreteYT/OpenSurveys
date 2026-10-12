@@ -7,6 +7,7 @@ import com.opensurveys.model.Form;
 import com.opensurveys.model.User;
 
 import java.util.List;
+import java.util.Optional;
 
 // Backs FormController: save() on POST /forms (create), findById() on GET /forms/{id}
 // (public fetch for anonymous form-filling), and findByCreatorOrderByIdDesc() on
@@ -16,4 +17,7 @@ public interface FormRepository extends JpaRepository<Form, Long> {
     // Questions are fetched in the same query because every caller maps or cascades them.
     @EntityGraph(attributePaths = "questions")
     List<Form> findByCreatorOrderByIdDesc(User creator);
+
+    @EntityGraph(attributePaths = "questions")
+    Optional<Form> findByAccessCode(String accessCode);
 }

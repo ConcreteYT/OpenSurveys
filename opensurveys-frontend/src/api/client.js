@@ -127,6 +127,7 @@ export const api = {
   updateForm: (id, data) => request(`/forms/${id}`, { method: 'PUT', body: data, auth: true }),
   listMyForms: () => request('/forms', { auth: true }),
   getForm: (id) => request(`/forms/${id}`),
+  getFormByAccessCode: (code) => request(`/forms/by-code/${encodeURIComponent(code)}`),
   // Send token when present so owners can load private responses; endpoint stays public for public forms.
   getFormResponses: (id) => request(`/forms/${id}/responses`, { auth: isAuthenticated() }),
   submitAnswers: (id, data) => request(`/forms/${id}/answers`, { method: 'POST', body: data }),

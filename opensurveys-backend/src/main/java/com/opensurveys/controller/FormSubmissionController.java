@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -163,6 +164,7 @@ public class FormSubmissionController {
 
         List<Answer> uploadAnswersToSave = new ArrayList<>();
         List<String> movedFilesForRollback = new ArrayList<>();
+        List<Answer> savedAnswers = null;
 
         try {
             uploadStorageService.ensureRootExists();
@@ -194,20 +196,43 @@ public class FormSubmissionController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "No answers to save"));
             }
 
-            List<Answer> savedAnswers = answerRepository.saveAll(allToSave);
+            savedAnswers = answerRepository.saveAll(allToSave);
+            LocalDateTime committedAt = LocalDateTime.now();
+            for (Answer saved : savedAnswers) {
+                Question question = saved.getQuestion();
+                if (question == null || !QuestionType.is(question.getQuestionType(), QuestionType.IMAGE_UPLOAD)) {
+                    continue;
+                }
+                List<String> currentNames = UploadStorageService.splitAnswerFileNames(saved.getAnswer());
+                List<String> renamed = uploadStorageService.renameCommittedImages(
+                        formId, currentNames, saved.getId(), committedAt, movedFilesForRollback);
+                saved.setAnswer(String.join(";", renamed));
+            }
+            savedAnswers = answerRepository.saveAll(savedAnswers);
             uploadStorageService.deleteStagingSession(stagingId);
             return ResponseEntity.status(HttpStatus.CREATED).body(AnswerResponse.fromAll(savedAnswers));
         } catch (UploadStorageService.UploadValidationException e) {
-            discardSubmission(formId, stagingId, movedFilesForRollback);
+            rollbackCommit(savedAnswers, formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         } catch (IOException e) {
-            discardSubmission(formId, stagingId, movedFilesForRollback);
+            rollbackCommit(savedAnswers, formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Failed to commit submission"));
         } catch (DataIntegrityViolationException e) {
-            discardSubmission(formId, stagingId, movedFilesForRollback);
+            rollbackCommit(savedAnswers, formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Could not save answers; please try again"));
         }
+    }
+
+    private void rollbackCommit(List<Answer> savedAnswers, long formId, String stagingId, List<String> movedFiles) {
+        if (savedAnswers != null && !savedAnswers.isEmpty()) {
+            try {
+                answerRepository.deleteAll(savedAnswers);
+            } catch (RuntimeException ignored) {
+                // best-effort; files are still removed below
+            }
+        }
+        discardSubmission(formId, stagingId, movedFiles);
     }
 
     private void discardSubmission(long formId, String stagingId, List<String> movedFiles) {
