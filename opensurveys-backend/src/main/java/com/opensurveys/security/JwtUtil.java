@@ -1,6 +1,7 @@
 package com.opensurveys.security;
 
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,11 +24,13 @@ public class JwtUtil {
     // Derived from the configured secret, so tokens stay valid across app restarts.
     private final SecretKey signingKey;
     private final long expirationMs;
+    private final JwtParser parser;
 
     public JwtUtil(@Value("${jwt.secret}") String secret,
                    @Value("${jwt.expiration-ms}") long expirationMs) {
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
+        this.parser = Jwts.parser().verifyWith(signingKey).build();
     }
 
     // Subject = username, so JwtAuthFilter can look the user up via UserRepository#findByUsername.
@@ -47,10 +50,7 @@ public class JwtUtil {
     // can fall through and treat the request as anonymous.
     public Optional<String> parseUsername(String token) {
         try {
-            return Optional.ofNullable(Jwts.parser()
-                    .verifyWith(signingKey)
-                    .build()
-                    .parseSignedClaims(token)
+            return Optional.ofNullable(parser.parseSignedClaims(token)
                     .getPayload()
                     .getSubject());
         } catch (JwtException | IllegalArgumentException e) {

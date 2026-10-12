@@ -25,10 +25,10 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -94,9 +94,9 @@ public class FormMediaController {
         }
     }
 
-    // The CSV and the list of image files are prepared up front; only the zip itself is streamed,
-    // so image bytes never have to be held in memory. Spring only streams when the declared body
-    // type is StreamingResponseBody, so early error responses go through ExportRejectedException.
+    // CSV rows are written straight into the zip entry, and image bytes are copied from disk.
+    // Spring only streams when the declared body type is StreamingResponseBody, so early error
+    // responses go through ExportRejectedException.
     @GetMapping("/forms/{formId}/export")
     public ResponseEntity<StreamingResponseBody> exportForm(@PathVariable Long formId) {
         Optional<User> userOptional = currentUserService.get();
@@ -117,39 +117,8 @@ public class FormMediaController {
         }
 
         List<Answer> answers = answerRepository.findAllByQuestionFormIdOrderByIdAsc(formId);
-        Set<String> imageNames = new LinkedHashSet<>();
 
-        StringBuilder csv = new StringBuilder();
-        csv.append("answer_id,question_id,question_text,question_type,answer\n");
-        for (Answer answer : answers) {
-            Question question = answer.getQuestion();
-            if (question == null) {
-                continue;
-            }
-            String answerText = answer.getAnswer() == null ? "" : answer.getAnswer();
-            if (QuestionType.is(question.getQuestionType(), QuestionType.IMAGE_UPLOAD)) {
-                imageNames.addAll(UploadStorageService.splitAnswerFileNames(answerText));
-            }
-            csv.append(csvCell(answer.getId()))
-                    .append(',')
-                    .append(csvCell(question.getId()))
-                    .append(',')
-                    .append(csvCell(question.getQuestionText()))
-                    .append(',')
-                    .append(csvCell(question.getQuestionType()))
-                    .append(',')
-                    .append(csvCell(answerText))
-                    .append('\n');
-        }
-
-        Map<String, Path> imagePaths = new LinkedHashMap<>();
-        for (String imageName : imageNames) {
-            uploadStorageService.findFormFile(formId, imageName)
-                    .ifPresent(path -> imagePaths.put(imageName, path));
-        }
-        byte[] csvBytes = csv.toString().getBytes(StandardCharsets.UTF_8);
-
-        StreamingResponseBody body = outputStream -> writeExportZip(outputStream, csvBytes, imagePaths);
+        StreamingResponseBody body = outputStream -> writeExportZip(outputStream, formId, answers);
         String downloadName = "survey-" + formId + "-responses.zip";
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + downloadName + "\"")
@@ -171,16 +140,20 @@ public class FormMediaController {
         }
     }
 
-    private static void writeExportZip(OutputStream outputStream, byte[] csvBytes, Map<String, Path> imagePaths)
-            throws IOException {
+    private void writeExportZip(OutputStream outputStream, long formId, List<Answer> answers) throws IOException {
+        Set<String> imageNames = new LinkedHashSet<>();
         try (ZipOutputStream zip = new ZipOutputStream(outputStream)) {
             zip.putNextEntry(new ZipEntry("responses.csv"));
-            zip.write(csvBytes);
+            writeCsvRows(zip, answers, imageNames);
             zip.closeEntry();
 
-            for (Map.Entry<String, Path> image : imagePaths.entrySet()) {
-                zip.putNextEntry(new ZipEntry("images/" + image.getKey()));
-                try (InputStream in = Files.newInputStream(image.getValue())) {
+            for (String imageName : imageNames) {
+                Optional<Path> path = uploadStorageService.findFormFile(formId, imageName);
+                if (path.isEmpty()) {
+                    continue;
+                }
+                zip.putNextEntry(new ZipEntry("images/" + imageName));
+                try (InputStream in = Files.newInputStream(path.get())) {
                     in.transferTo(zip);
                 }
                 zip.closeEntry();
@@ -188,16 +161,49 @@ public class FormMediaController {
         }
     }
 
+    private static void writeCsvRows(OutputStream zip, List<Answer> answers, Set<String> imageNames) throws IOException {
+        OutputStreamWriter csv = new OutputStreamWriter(zip, StandardCharsets.UTF_8);
+        csv.write("answer_id,question_id,question_text,question_type,answer\n");
+        for (Answer answer : answers) {
+            Question question = answer.getQuestion();
+            if (question == null) {
+                continue;
+            }
+            String answerText = answer.getAnswer() == null ? "" : answer.getAnswer();
+            if (QuestionType.is(question.getQuestionType(), QuestionType.IMAGE_UPLOAD)) {
+                imageNames.addAll(UploadStorageService.splitAnswerFileNames(answerText));
+            }
+            csv.write(csvCell(answer.getId()));
+            csv.write(',');
+            csv.write(csvCell(question.getId()));
+            csv.write(',');
+            csv.write(csvCell(question.getQuestionText()));
+            csv.write(',');
+            csv.write(csvCell(question.getQuestionType()));
+            csv.write(',');
+            csv.write(csvCell(answerText));
+            csv.write('\n');
+        }
+        csv.flush();
+    }
+
     private boolean isFileReferencedByFormAnswers(long formId, String fileName) {
         return answerRepository.findAnswersContaining(formId, QuestionType.IMAGE_UPLOAD, fileName).stream()
                 .anyMatch(answer -> UploadStorageService.splitAnswerFileNames(answer).contains(fileName));
     }
 
-    private static String csvCell(Object value) {
+    static String csvCell(Object value) {
         String text = value == null ? "" : String.valueOf(value);
+        if (!text.isEmpty() && isSpreadsheetFormulaPrefix(text.charAt(0))) {
+            text = "'" + text;
+        }
         if (text.contains("\"") || text.contains(",") || text.contains("\n") || text.contains("\r")) {
             return "\"" + text.replace("\"", "\"\"") + "\"";
         }
         return text;
+    }
+
+    private static boolean isSpreadsheetFormulaPrefix(char first) {
+        return first == '=' || first == '+' || first == '-' || first == '@';
     }
 }

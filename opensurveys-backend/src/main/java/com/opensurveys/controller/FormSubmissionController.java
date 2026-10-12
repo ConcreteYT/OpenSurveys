@@ -176,7 +176,7 @@ public class FormSubmissionController {
                 Long qid = question.getId();
                 List<String> moved = uploadStorageService.moveStagedQuestionToFinal(formId, stagingId, qid);
                 if (moved.isEmpty()) {
-                    uploadStorageService.deleteStagingSession(stagingId);
+                    discardSubmission(formId, stagingId, movedFilesForRollback);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                             .body(Map.of("error", "Missing uploaded images for question " + qid));
                 }

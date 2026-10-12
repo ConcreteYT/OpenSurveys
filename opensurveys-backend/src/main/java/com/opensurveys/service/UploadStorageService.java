@@ -5,15 +5,18 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.IIOException;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Iterator;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -37,6 +40,9 @@ public class UploadStorageService {
             "image/webp",
             "image/gif"
     );
+    /** Reject before a full decode so a small compressed file cannot expand without bound. */
+    static final long MAX_IMAGE_PIXELS = 20_000_000L;
+    static final long STAGING_MAX_AGE_MILLIS = 24L * 60 * 60 * 1000;
 
     private final Path uploadRoot;
 
@@ -93,6 +99,7 @@ public class UploadStorageService {
             int maxFiles,
             List<MultipartFile> files
     ) throws IOException {
+        sweepExpiredStagingDirectories();
         if (files == null || files.isEmpty()) {
             throw new UploadValidationException("At least one image is required");
         }
@@ -199,6 +206,34 @@ public class UploadStorageService {
         return renamed;
     }
 
+    /**
+     * Deletes staging session directories whose own lastModified time is older than 24 hours.
+     * Younger sessions, including one being written by the current request, are left in place.
+     */
+    public void sweepExpiredStagingDirectories() {
+        Path stagingRoot = uploadRoot.resolve("staging");
+        if (!Files.isDirectory(stagingRoot)) {
+            return;
+        }
+        long cutoff = System.currentTimeMillis() - STAGING_MAX_AGE_MILLIS;
+        try (Stream<Path> children = Files.list(stagingRoot)) {
+            for (Path child : children.toList()) {
+                try {
+                    if (!Files.isDirectory(child)) {
+                        continue;
+                    }
+                    if (Files.getLastModifiedTime(child).toMillis() < cutoff) {
+                        deleteDirectoryRecursive(child);
+                    }
+                } catch (IOException | UncheckedIOException ignored) {
+                    // best-effort; a locked or racing session can be retried later
+                }
+            }
+        } catch (IOException ignored) {
+            // best-effort
+        }
+    }
+
     public void deleteStagingSession(String stagingId) {
         try {
             validateStagingId(stagingId);
@@ -244,21 +279,59 @@ public class UploadStorageService {
             }
         }
 
-        byte[] bytes = file.getBytes();
-        if (bytes.length == 0) {
-            throw new UploadValidationException("Empty file");
-        }
-        try (InputStream imageStream = new ByteArrayInputStream(bytes)) {
-            BufferedImage image = ImageIO.read(imageStream);
-            if (image == null) {
-                throw new UploadValidationException("Not a valid image file");
-            }
-        }
-
         String storedName = UUID.randomUUID() + "." + extension;
         Path target = targetDir.resolve(storedName);
-        Files.write(target, bytes);
-        return storedName;
+        boolean accepted = false;
+        try {
+            try (InputStream in = file.getInputStream()) {
+                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            if (Files.size(target) == 0) {
+                throw new UploadValidationException("Empty file");
+            }
+            assertImageWithinPixelLimit(target);
+            accepted = true;
+            return storedName;
+        } finally {
+            if (!accepted) {
+                Files.deleteIfExists(target);
+            }
+        }
+    }
+
+    /**
+     * Reads dimensions from the file already on disk, rejects decompression bombs before a full
+     * decode, then decodes once (the bytes are not also held in a byte[]) to reject non-images.
+     */
+    private static void assertImageWithinPixelLimit(Path path) throws IOException {
+        try (ImageInputStream input = ImageIO.createImageInputStream(path.toFile())) {
+            if (input == null) {
+                throw new UploadValidationException("Not a valid image file");
+            }
+            Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
+            if (!readers.hasNext()) {
+                throw new UploadValidationException("Not a valid image file");
+            }
+            ImageReader reader = readers.next();
+            try {
+                reader.setInput(input, false, true);
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+                long pixels = (long) width * (long) height;
+                if (width <= 0 || height <= 0 || pixels > MAX_IMAGE_PIXELS) {
+                    throw new UploadValidationException("Image exceeds " + MAX_IMAGE_PIXELS + " pixels");
+                }
+                BufferedImage image = reader.read(0);
+                if (image == null) {
+                    throw new UploadValidationException("Not a valid image file");
+                }
+                image.flush();
+            } catch (IIOException | IndexOutOfBoundsException e) {
+                throw new UploadValidationException("Not a valid image file");
+            } finally {
+                reader.dispose();
+            }
+        }
     }
 
     private static String extensionFromFilename(String filename) {

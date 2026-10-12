@@ -5,7 +5,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
+import java.util.zip.CRC32;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -83,6 +86,67 @@ class UploadStorageServiceTest {
         assertTrue(service.findFormFile(1, "").isEmpty());
         assertTrue(service.findFormFile(1, null).isEmpty());
         assertTrue(service.findFormFile(1, "missing.png").isEmpty());
+    }
+
+    @Test
+    void rejectsImageWhosePixelCountExceedsLimit() throws IOException {
+        UploadStorageService service = new UploadStorageService(root.toString());
+        byte[] bomb = pngClaimingDimensions(20_000, 1_001);
+        assertTrue((long) 20_000 * 1_001 > UploadStorageService.MAX_IMAGE_PIXELS);
+        MultipartFile file = new MockMultipartFile("files", "bomb.png", "image/png", bomb);
+
+        UploadStorageService.UploadValidationException error = assertThrows(
+                UploadStorageService.UploadValidationException.class,
+                () -> service.stageQuestionFiles(1, UUID.randomUUID().toString(), 2, 1, List.of(file)));
+        assertTrue(error.getMessage().contains("pixels"));
+        try (var children = Files.list(root.resolve("staging"))) {
+            for (Path session : children.toList()) {
+                try (var nested = Files.walk(session)) {
+                    assertTrue(nested.filter(Files::isRegularFile).findAny().isEmpty());
+                }
+            }
+        }
+    }
+
+    private static byte[] pngClaimingDimensions(int width, int height) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(new byte[] {(byte) 137, 80, 78, 71, 13, 10, 26, 10});
+        byte[] ihdr = new byte[13];
+        ihdr[0] = (byte) (width >>> 24);
+        ihdr[1] = (byte) (width >>> 16);
+        ihdr[2] = (byte) (width >>> 8);
+        ihdr[3] = (byte) width;
+        ihdr[4] = (byte) (height >>> 24);
+        ihdr[5] = (byte) (height >>> 16);
+        ihdr[6] = (byte) (height >>> 8);
+        ihdr[7] = (byte) height;
+        ihdr[8] = 8;
+        ihdr[9] = 2;
+        writePngChunk(out, "IHDR", ihdr);
+        writePngChunk(out, "IEND", new byte[0]);
+        return out.toByteArray();
+    }
+
+    private static void writePngChunk(ByteArrayOutputStream out, String type, byte[] data) throws IOException {
+        out.write(new byte[] {
+                (byte) (data.length >>> 24),
+                (byte) (data.length >>> 16),
+                (byte) (data.length >>> 8),
+                (byte) data.length
+        });
+        byte[] typeBytes = type.getBytes(StandardCharsets.US_ASCII);
+        out.write(typeBytes);
+        out.write(data);
+        CRC32 crc = new CRC32();
+        crc.update(typeBytes);
+        crc.update(data);
+        long value = crc.getValue();
+        out.write(new byte[] {
+                (byte) (value >>> 24),
+                (byte) (value >>> 16),
+                (byte) (value >>> 8),
+                (byte) value
+        });
     }
 
     @Test
