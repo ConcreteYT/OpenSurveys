@@ -4,6 +4,8 @@ import com.opensurveys.model.Form;
 import com.opensurveys.model.User;
 import com.opensurveys.repository.FormRepository;
 import com.opensurveys.repository.UserRepository;
+import com.opensurveys.repository.VerificationCodeRepository;
+import com.opensurveys.repository.VerificationLockRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,11 +36,19 @@ public class UserDeletionService {
     @Autowired
     private UploadStorageService uploadStorageService;
 
+    @Autowired
+    private VerificationCodeRepository verificationCodeRepository;
+
+    @Autowired
+    private VerificationLockRepository verificationLockRepository;
+
     @Transactional
     public void deleteUserAndForms(User user) {
         List<Form> forms = formRepository.findByCreatorOrderByIdDesc(user);
         List<Long> formIds = forms.stream().map(Form::getId).toList();
         formRepository.deleteAll(forms);
+        verificationCodeRepository.deleteByUserId(user.getId());
+        verificationLockRepository.deleteByUserId(user.getId());
         userRepository.delete(user);
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {

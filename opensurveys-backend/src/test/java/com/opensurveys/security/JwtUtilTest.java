@@ -31,6 +31,14 @@ class JwtUtilTest {
     }
 
     @Test
+    void embedsTokenVersion() {
+        JwtUtil jwtUtil = new JwtUtil(SECRET, 60_000);
+        String token = jwtUtil.generateToken("alice", 3);
+        assertEquals(3, jwtUtil.parse(token).orElseThrow().version());
+        assertEquals(0, jwtUtil.parse(jwtUtil.generateToken("alice")).orElseThrow().version());
+    }
+
+    @Test
     void rejectsGarbageWithoutThrowing() {
         JwtUtil jwtUtil = new JwtUtil(SECRET, 60_000);
         assertTrue(jwtUtil.parseUsername("not-a-jwt").isEmpty());

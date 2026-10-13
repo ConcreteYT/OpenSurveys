@@ -198,7 +198,7 @@ export default function SurveyEditor() {
   const isEdit = Boolean(formId)
 
   const [name, setName] = useState('')
-  const [responsesPublic, setResponsesPublic] = useState(true)
+  const [responsesPublic, setResponsesPublic] = useState(false)
   const [oneResponseOnly, setOneResponseOnly] = useState(true)
   const [questions, setQuestions] = useState([emptyQuestion()])
   const [loading, setLoading] = useState(isEdit)

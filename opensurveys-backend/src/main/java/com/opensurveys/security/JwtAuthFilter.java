@@ -37,31 +37,31 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private AuthCookieService authCookieService;
+
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
                                      @NonNull HttpServletResponse response,
                                      @NonNull FilterChain filterChain) throws ServletException, IOException {
 
+        String token = null;
         String authHeader = request.getHeader(AUTH_HEADER);
-
-        // No/other header format (e.g. anonymous GET /forms/{id} request) -> just continue
-        // the chain unauthenticated; SecurityConfig's permitAll() rules allow that.
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
-            String token = authHeader.substring(BEARER_PREFIX.length());
-            Optional<String> username = jwtUtil.parseUsername(token);
+            token = authHeader.substring(BEARER_PREFIX.length());
+        } else {
+            token = authCookieService.read(request).orElse(null);
+        }
 
-            if (username.isPresent() && SecurityContextHolder.getContext().getAuthentication() == null) {
-                Optional<User> userOpt = userRepository.findByUsername(username.get());
-
-                if (userOpt.isPresent()) {
-                    // Principal is the plain username String; the loaded User rides along as
-                    // the authentication details so CurrentUserService needn't query it again.
-                    // Authority comes from User.role (USER/ADMIN) so SecurityConfig
-                    // can gate admin-only routes like GET /users.
+        if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            Optional<ParsedToken> parsed = jwtUtil.parse(token);
+            if (parsed.isPresent()) {
+                Optional<User> userOpt = userRepository.findByUsername(parsed.get().username());
+                if (userOpt.isPresent() && userOpt.get().getTokenVersion() == parsed.get().version()) {
                     User user = userOpt.get();
                     String authority = "ROLE_" + user.getRole();
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            username.get(),
+                            parsed.get().username(),
                             null,
                             List.of(new SimpleGrantedAuthority(authority))
                     );
@@ -69,9 +69,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-            // Invalid/expired token: silently fall through as unauthenticated rather than
-            // rejecting outright, so SecurityConfig's per-route rules are the single source
-            // of truth for what actually requires auth.
         }
 
         filterChain.doFilter(request, response);

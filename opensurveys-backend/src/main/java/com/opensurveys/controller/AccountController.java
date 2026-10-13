@@ -21,10 +21,16 @@ import com.opensurveys.dto.UpdateProfileRequest;
 import com.opensurveys.model.User;
 import com.opensurveys.model.VerificationCode;
 import com.opensurveys.repository.UserRepository;
-import com.opensurveys.security.JwtUtil;
+import com.opensurveys.security.AuthCookieService;
+import com.opensurveys.security.ClientRateLimiter;
 import com.opensurveys.service.CurrentUserService;
+import com.opensurveys.service.PasswordPolicy;
 import com.opensurveys.service.UserDeletionService;
 import com.opensurveys.service.VerificationCodeService;
+import com.opensurveys.service.VerificationCodeService.ConsumeResult;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.Map;
 import java.util.Optional;
@@ -50,10 +56,13 @@ public class AccountController {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private JwtUtil jwtUtil;
+    private AuthCookieService authCookieService;
 
     @Autowired
     private VerificationCodeService verificationCodeService;
+
+    @Autowired
+    private ClientRateLimiter rateLimiter;
 
     @GetMapping("/me")
     public ResponseEntity<?> me() {
@@ -62,11 +71,11 @@ public class AccountController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "not authenticated"));
         }
-        return ResponseEntity.ok(toProfile(user, null));
+        return ResponseEntity.ok(toProfile(user));
     }
 
     @PutMapping("/profile")
-    public ResponseEntity<?> updateProfile(@RequestBody UpdateProfileRequest request) {
+    public ResponseEntity<?> updateProfile(@RequestBody UpdateProfileRequest request, HttpServletResponse httpResponse) {
         User user = currentUser();
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -89,8 +98,10 @@ public class AccountController {
         user.setUsername(newUsername);
         userRepository.save(user);
 
-        String token = usernameChanged ? jwtUtil.generateToken(user.getUsername()) : null;
-        return ResponseEntity.ok(toProfile(user, token));
+        if (usernameChanged) {
+            authCookieService.write(httpResponse, user);
+        }
+        return ResponseEntity.ok(toProfile(user));
     }
 
     @PutMapping("/email")
@@ -125,11 +136,11 @@ public class AccountController {
 
         user.setEmail(newEmail);
         userRepository.save(user);
-        return ResponseEntity.ok(toProfile(user, null));
+        return ResponseEntity.ok(toProfile(user));
     }
 
     @PutMapping("/password")
-    public ResponseEntity<?> updatePassword(@RequestBody UpdatePasswordRequest request) {
+    public ResponseEntity<?> updatePassword(@RequestBody UpdatePasswordRequest request, HttpServletResponse httpResponse) {
         User user = currentUser();
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -141,7 +152,7 @@ public class AccountController {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "new password is required"));
         }
-        if (newPassword.length() < 6) {
+        if (PasswordPolicy.isTooShort(newPassword)) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "password must be at least 6 characters"));
         }
@@ -157,22 +168,28 @@ public class AccountController {
         }
 
         user.setPassword(passwordEncoder.encode(newPassword));
+        user.bumpTokenVersion();
         userRepository.save(user);
-        return ResponseEntity.ok(toProfile(user, null));
+        authCookieService.write(httpResponse, user);
+        return ResponseEntity.ok(toProfile(user));
     }
 
     @PostMapping("/send-code")
-    public ResponseEntity<?> sendCode(@RequestBody SendCodeRequest request) {
+    public ResponseEntity<?> sendCode(@RequestBody SendCodeRequest request, HttpServletRequest httpRequest) {
         User user = currentUser();
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("error", "not authenticated"));
         }
 
+        if (!rateLimiter.allow("send-code:" + httpRequest.getRemoteAddr(), 5, 10 * 60 * 1000L)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(Map.of("error", "too many requests"));
+        }
+
         String purpose = normalizePurpose(request.getPurpose());
         if (purpose == null) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", "purpose must be EMAIL_CHANGE or PASSWORD_CHANGE"));
+                    .body(Map.of("error", "purpose must be EMAIL_CHANGE, PASSWORD_CHANGE, or ACCOUNT_DELETE"));
         }
 
         try {
@@ -181,11 +198,14 @@ public class AccountController {
         } catch (VerificationCodeService.MailSendFailedException e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Map.of("error", e.getMessage()));
+        } catch (VerificationCodeService.LockedOutException e) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", e.getMessage()));
         }
     }
 
     @DeleteMapping
-    public ResponseEntity<?> deleteAccount(@RequestBody DeleteAccountRequest request) {
+    public ResponseEntity<?> deleteAccount(@RequestBody DeleteAccountRequest request, HttpServletResponse httpResponse) {
         User user = currentUser();
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -203,7 +223,28 @@ public class AccountController {
                     .body(Map.of("error", "cannot delete the last admin"));
         }
 
+        if (user.getPassword() != null && !user.getPassword().isBlank()) {
+            if (request.getCurrentPassword() == null
+                    || !passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "incorrect password"));
+            }
+        } else {
+            ResponseEntity<?> authError = requirePasswordOrCode(
+                    user,
+                    null,
+                    request.getCode(),
+                    VerificationCode.PURPOSE_ACCOUNT_DELETE
+            );
+            if (authError != null) {
+                return authError;
+            }
+        }
+
+        user.bumpTokenVersion();
+        userRepository.save(user);
         userDeletionService.deleteUserAndForms(user);
+        authCookieService.clear(httpResponse);
         return ResponseEntity.noContent().build();
     }
 
@@ -222,7 +263,12 @@ public class AccountController {
         }
 
         if (hasCodeAttempt) {
-            if (!verificationCodeService.consumeCode(user, purpose, code)) {
+            ConsumeResult result = verificationCodeService.consumeCode(user, purpose, code);
+            if (result == ConsumeResult.LOCKED) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                        .body(Map.of("error", "too many attempts; try again in 24 hours"));
+            }
+            if (result != ConsumeResult.OK) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(Map.of("error", "invalid or expired verification code"));
             }
@@ -249,8 +295,8 @@ public class AccountController {
         return currentUserService.get().orElse(null);
     }
 
-    private AccountProfileResponse toProfile(User user, String token) {
-        AccountProfileResponse response = new AccountProfileResponse(
+    private AccountProfileResponse toProfile(User user) {
+        return new AccountProfileResponse(
                 user.getId(),
                 user.getName(),
                 user.getUsername(),
@@ -258,8 +304,6 @@ public class AccountController {
                 user.getRole(),
                 user.getPassword() != null && !user.getPassword().isBlank()
         );
-        response.setToken(token);
-        return response;
     }
 
     private static String normalizePurpose(String purpose) {
@@ -268,7 +312,8 @@ public class AccountController {
         }
         String normalized = purpose.trim().toUpperCase();
         if (VerificationCode.PURPOSE_EMAIL_CHANGE.equals(normalized)
-                || VerificationCode.PURPOSE_PASSWORD_CHANGE.equals(normalized)) {
+                || VerificationCode.PURPOSE_PASSWORD_CHANGE.equals(normalized)
+                || VerificationCode.PURPOSE_ACCOUNT_DELETE.equals(normalized)) {
             return normalized;
         }
         return null;

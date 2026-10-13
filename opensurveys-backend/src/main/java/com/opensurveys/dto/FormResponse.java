@@ -1,5 +1,6 @@
 package com.opensurveys.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.opensurveys.model.Form;
 
 import java.util.List;
@@ -13,6 +14,14 @@ import java.util.List;
 public class FormResponse {
 
     public static FormResponse from(Form form) {
+        return from(form, true, false);
+    }
+
+    public static FormResponse forRespondent(Form form, boolean alreadySubmitted) {
+        return from(form, false, alreadySubmitted);
+    }
+
+    private static FormResponse from(Form form, boolean includeAccessCode, boolean alreadySubmitted) {
         List<QuestionResponse> questionResponses = form.getQuestions().stream()
                 .map(question -> new QuestionResponse(
                         question.getId(),
@@ -21,19 +30,23 @@ public class FormResponse {
                         question.getQuestionOptions()))
                 .toList();
 
-        return new FormResponse(
+        FormResponse response = new FormResponse(
                 form.getId(),
-                form.getAccessCode(),
+                includeAccessCode ? form.getAccessCode() : null,
                 form.getName(),
                 form.isResponsesPublic(),
                 form.isOneResponseOnly(),
                 questionResponses,
                 form.getCreator().getUsername()
         );
+        response.setAlreadySubmitted(alreadySubmitted);
+        return response;
     }
 
     private Long id;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private String accessCode;
+    private boolean alreadySubmitted;
     private String name;
     private boolean responsesPublic;
     private boolean oneResponseOnly;
@@ -68,6 +81,14 @@ public class FormResponse {
 
     public void setAccessCode(String accessCode) {
         this.accessCode = accessCode;
+    }
+
+    public boolean isAlreadySubmitted() {
+        return alreadySubmitted;
+    }
+
+    public void setAlreadySubmitted(boolean alreadySubmitted) {
+        this.alreadySubmitted = alreadySubmitted;
     }
 
     public String getName() {

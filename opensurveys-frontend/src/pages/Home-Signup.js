@@ -5,7 +5,7 @@
  */
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, markSession } from '../api/client';
 import { requestGoogleIdToken } from '../auth/googleSignIn';
 import { showUnavailableFeature } from '../utils/showUnavailableFeature';
 import { useT, T } from '../i18n';
@@ -25,10 +25,8 @@ export default function Home() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const finishAuth = (token, role, authUsername) => {
-    localStorage.setItem('token', token)
-    localStorage.setItem('username', authUsername)
-    localStorage.setItem('role', role || 'USER')
+  const finishAuth = (role, authUsername) => {
+    markSession(role || 'USER', authUsername)
     navigate('/login-home')
   }
 
@@ -47,14 +45,21 @@ export default function Home() {
 
     setIsSubmitting(true)
     try {
-      const { token, role, username: authUsername } = await api.signup({
+      const result = await api.signup({
         username,
         email,
         password,
         name: `${firstName} ${lastName}`.trim(),
       })
-      finishAuth(token, role, authUsername || username)
+      if (result?.verificationRequired) {
+        navigate('/auth/verify', { state: { username: result.username || username } })
+        return
+      }
+      finishAuth(result.role, result.username || username)
     } catch (err) {
+      if (err.body?.verificationRequired) {
+        navigate('/auth/verify', { state: { username: err.body.username || username } })
+      }
       setError(err.message || t('signup.error'))
     } finally {
       setIsSubmitting(false)
@@ -66,8 +71,12 @@ export default function Home() {
     setIsSubmitting(true)
     try {
       const idToken = await requestGoogleIdToken()
-      const { token, role, username: authUsername } = await api.googleLogin({ idToken })
-      finishAuth(token, role, authUsername)
+      const result = await api.googleLogin({ idToken })
+      if (result?.verificationRequired) {
+        navigate('/auth/verify', { state: { username: result.username } })
+        return
+      }
+      finishAuth(result.role, result.username)
     } catch (err) {
       setError(err.message || t('signup.error'))
     } finally {

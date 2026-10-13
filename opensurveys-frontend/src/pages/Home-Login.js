@@ -4,7 +4,7 @@
  */
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, markSession } from '../api/client';
 import { requestGoogleIdToken } from '../auth/googleSignIn';
 import { showUnavailableFeature } from '../utils/showUnavailableFeature';
 import { useT, T } from '../i18n';
@@ -19,10 +19,8 @@ export default function Home() {
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const finishAuth = (token, role, authUsername) => {
-    localStorage.setItem('token', token)
-    localStorage.setItem('username', authUsername)
-    localStorage.setItem('role', role || 'USER')
+  const finishAuth = (role, authUsername) => {
+    markSession(role || 'USER', authUsername)
     navigate(role === 'ADMIN' ? '/admin' : '/login-home')
   }
 
@@ -32,8 +30,12 @@ export default function Home() {
     setError('')
     setIsSubmitting(true)
     try {
-      const { token, role, username: authUsername } = await api.login({ username, password })
-      finishAuth(token, role, authUsername || username)
+      const result = await api.login({ username, password })
+      if (result?.verificationRequired) {
+        navigate('/auth/verify', { state: { username: result.username || username } })
+        return
+      }
+      finishAuth(result.role, result.username || username)
     } catch (err) {
       setError(err.message || t('login.error'))
     } finally {
@@ -46,8 +48,12 @@ export default function Home() {
     setIsSubmitting(true)
     try {
       const idToken = await requestGoogleIdToken()
-      const { token, role, username: authUsername } = await api.googleLogin({ idToken })
-      finishAuth(token, role, authUsername)
+      const result = await api.googleLogin({ idToken })
+      if (result?.verificationRequired) {
+        navigate('/auth/verify', { state: { username: result.username } })
+        return
+      }
+      finishAuth(result.role, result.username)
     } catch (err) {
       setError(err.message || t('login.error'))
     } finally {

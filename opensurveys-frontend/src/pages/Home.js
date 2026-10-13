@@ -5,7 +5,7 @@
  */
 import React, { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, rememberSurveyCode } from '../api/client';
 import { useT, T } from '../i18n';
 import ScrambleText from '../animations/ScrambleText';
 
@@ -41,6 +41,7 @@ export default function Home() {
     setIsChecking(true)
     try {
       const form = await api.getFormByAccessCode(code)
+      rememberSurveyCode(form.id, code)
       navigate(`/access?formId=${form.id}`)
     } catch (err) {
       const message = err?.message || ''

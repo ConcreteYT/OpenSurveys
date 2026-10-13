@@ -16,4 +16,6 @@ public interface VerificationCodeRepository extends JpaRepository<VerificationCo
     @Modifying(clearAutomatically = true)
     @Query("UPDATE VerificationCode v SET v.used = true WHERE v.userId = :userId AND v.purpose = :purpose AND v.used = false")
     void invalidateUnused(@Param("userId") Long userId, @Param("purpose") String purpose);
+
+    void deleteByUserId(Long userId);
 }

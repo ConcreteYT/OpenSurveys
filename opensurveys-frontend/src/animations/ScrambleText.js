@@ -1,11 +1,25 @@
 import React, { useLayoutEffect, useRef } from 'react'
-import { animate, scrambleText } from 'animejs'
 
 const DEFAULT_SCRAMBLE = {
   duration: 520,
   chars: 'uppercase',
   perturbation: 0.18,
   from: 'left',
+}
+
+const SCRAMBLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+
+function mixText(from, to, progress) {
+  const length = Math.max(from.length, to.length)
+  let out = ''
+  for (let i = 0; i < length; i += 1) {
+    if (progress > i / length) {
+      out += to[i] || ''
+    } else {
+      out += SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)]
+    }
+  }
+  return out
 }
 
 function prefersReducedMotion() {
@@ -61,18 +75,24 @@ export default function ScrambleText({
     }
 
     const target = value
+    const from = displayedRef.current
     displayedRef.current = target
+    const duration = (scrambleOptions && scrambleOptions.duration) || DEFAULT_SCRAMBLE.duration
+    const start = performance.now()
+    let frame = 0
 
-    animRef.current = animate(el, {
-      innerHTML: scrambleText({
-        ...DEFAULT_SCRAMBLE,
-        ...(scrambleOptions || {}),
-        text: target,
-      }),
-    })
+    const tick = (now) => {
+      const progress = Math.min(1, (now - start) / duration)
+      el.textContent = mixText(from, target, progress)
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick)
+      }
+    }
+    frame = requestAnimationFrame(tick)
+    animRef.current = { pause: () => cancelAnimationFrame(frame) }
 
     return () => {
-      animRef.current?.pause?.()
+      cancelAnimationFrame(frame)
       animRef.current = null
       if (el && displayedRef.current === target) {
         el.textContent = target

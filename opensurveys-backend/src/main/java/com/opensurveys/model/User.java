@@ -35,14 +35,20 @@ public class User {
     @Column(name = "user_id")
     private Long id;
 
-    @Column(name = "username")
+    @Column(name = "username", unique = true)
     private String username;
 
     @Column(name = "name")
     private String name;
 
-    @Column(name = "email")
+    @Column(name = "email", unique = true)
     private String email;
+
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = false;
+
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion = 0;
 
     // BCrypt hash only (set by AuthController via PasswordEncoder), never the raw password.
     // Null for Google-only accounts (no password login until they set one).
@@ -91,6 +97,26 @@ public class User {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
+    }
+
+    public int getTokenVersion() {
+        return tokenVersion;
+    }
+
+    public void setTokenVersion(int tokenVersion) {
+        this.tokenVersion = tokenVersion;
+    }
+
+    public void bumpTokenVersion() {
+        this.tokenVersion++;
     }
 
     public String getPassword() {

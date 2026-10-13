@@ -13,7 +13,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { animate } from 'animejs'
-import { api, mediaUrl } from '../api/client'
+import { api, mediaUrl, surveyCodeFor } from '../api/client'
 import { useT } from '../i18n'
 
 // Must match backend QuestionType (QUESTION.questiontype):
@@ -72,20 +72,13 @@ function validateUploadFiles(files, maxFiles, t) {
   return ''
 }
 
-function MediaThumbnail({ formId, fileName, authenticated }) {
-  const [src, setSrc] = React.useState(authenticated ? null : mediaUrl(formId, fileName))
+function MediaThumbnail({ formId, fileName }) {
+  const [src, setSrc] = React.useState(null)
 
   React.useEffect(() => {
-    if (!authenticated) {
-      setSrc(mediaUrl(formId, fileName))
-      return undefined
-    }
     let objectUrl
     let cancelled = false
-    const token = localStorage.getItem('token')
-    fetch(mediaUrl(formId, fileName), {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    fetch(mediaUrl(formId, fileName), { credentials: 'include' })
       .then((res) => {
         if (!res.ok) throw new Error('Failed to load image')
         return res.blob()
@@ -102,7 +95,7 @@ function MediaThumbnail({ formId, fileName, authenticated }) {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [formId, fileName, authenticated])
+  }, [formId, fileName])
 
   if (!src) {
     return <div className="results-upload-thumb results-upload-thumb--loading" />
@@ -294,7 +287,8 @@ export default function Access() {
       setError('')
       setIsLoading(true)
       try {
-        const data = await api.getForm(formId)
+        const code = surveyCodeFor(formId)
+        const data = code ? await api.getFormByAccessCode(code) : await api.getForm(formId)
         if (cancelled) return
 
         const formQuestions = data.questions || []
@@ -311,7 +305,7 @@ export default function Access() {
         setAnswers({})
         setAnswer('')
         setSelectedChoices([])
-        setIsCompleted(Boolean(hasCompletedThisForm))
+        setIsCompleted(Boolean(hasCompletedThisForm) || Boolean(data.alreadySubmitted && data.oneResponseOnly !== false))
       } catch (err) {
         if (!cancelled) {
           setError(err.message || t('access.loadError'))

@@ -10,7 +10,10 @@ import com.opensurveys.model.QuestionType;
 import com.opensurveys.repository.AnswerRepository;
 import com.opensurveys.repository.FormRepository;
 import com.opensurveys.repository.QuestionRepository;
+import com.opensurveys.service.RespondentTokenService;
 import com.opensurveys.service.UploadStorageService;
+
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -46,6 +49,9 @@ public class FormSubmissionController {
 
     @Autowired
     private UploadStorageService uploadStorageService;
+
+    @Autowired
+    private RespondentTokenService respondentTokenService;
 
     @PostMapping(
             value = "/forms/{formId}/staging/{stagingId}/questions/{questionId}/files",
@@ -100,7 +106,8 @@ public class FormSubmissionController {
     public ResponseEntity<?> commitSubmission(
             @PathVariable Long formId,
             @PathVariable String stagingId,
-            @RequestBody AnswerSubmissionRequest submissionRequest
+            @RequestBody AnswerSubmissionRequest submissionRequest,
+            HttpServletRequest request
     ) {
         try {
             UploadStorageService.validateStagingId(stagingId);
@@ -165,6 +172,15 @@ public class FormSubmissionController {
         List<Answer> uploadAnswersToSave = new ArrayList<>();
         List<String> movedFilesForRollback = new ArrayList<>();
         List<Answer> savedAnswers = null;
+        boolean consumedToken = false;
+
+        if (form.isOneResponseOnly()) {
+            if (!respondentTokenService.consume(formId, request)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("error", "This survey already has a response from this browser"));
+            }
+            consumedToken = true;
+        }
 
         try {
             uploadStorageService.ensureRootExists();
@@ -176,6 +192,9 @@ public class FormSubmissionController {
                 Long qid = question.getId();
                 List<String> moved = uploadStorageService.moveStagedQuestionToFinal(formId, stagingId, qid);
                 if (moved.isEmpty()) {
+                    if (consumedToken) {
+                        respondentTokenService.restore(formId, request);
+                    }
                     discardSubmission(formId, stagingId, movedFilesForRollback);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                             .body(Map.of("error", "Missing uploaded images for question " + qid));
@@ -192,6 +211,9 @@ public class FormSubmissionController {
             allToSave.addAll(uploadAnswersToSave);
 
             if (allToSave.isEmpty()) {
+                if (consumedToken) {
+                    respondentTokenService.restore(formId, request);
+                }
                 discardSubmission(formId, stagingId, movedFilesForRollback);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "No answers to save"));
             }
@@ -212,12 +234,21 @@ public class FormSubmissionController {
             uploadStorageService.deleteStagingSession(stagingId);
             return ResponseEntity.status(HttpStatus.CREATED).body(AnswerResponse.fromAll(savedAnswers));
         } catch (UploadStorageService.UploadValidationException e) {
+            if (consumedToken) {
+                respondentTokenService.restore(formId, request);
+            }
             rollbackCommit(savedAnswers, formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         } catch (IOException e) {
+            if (consumedToken) {
+                respondentTokenService.restore(formId, request);
+            }
             rollbackCommit(savedAnswers, formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "Failed to commit submission"));
         } catch (DataIntegrityViolationException e) {
+            if (consumedToken) {
+                respondentTokenService.restore(formId, request);
+            }
             rollbackCommit(savedAnswers, formId, stagingId, movedFilesForRollback);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Could not save answers; please try again"));

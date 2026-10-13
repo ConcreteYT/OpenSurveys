@@ -6,7 +6,7 @@
  */
 import React, { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../api/client'
+import { api, rememberSurveyCode } from '../api/client'
 import { useT, T } from '../i18n'
 import ScrambleText from '../animations/ScrambleText'
 
@@ -67,17 +67,16 @@ export default function Home() {
       return
     }
 
-    // Access codes are the form id (leading zeros allowed, e.g. 00000004 → 4).
-    const formId = Number.parseInt(code, 10)
-    if (!Number.isFinite(formId) || formId <= 0) {
+    if (!/^\d{8}$/.test(code)) {
       setError(t('home.errorInvalid'))
       return
     }
 
     setIsChecking(true)
     try {
-      await api.getForm(formId)
-      navigate(`/access?formId=${formId}`)
+      const form = await api.getFormByAccessCode(code)
+      rememberSurveyCode(form.id, code)
+      navigate(`/access?formId=${form.id}`)
     } catch (err) {
       const message = err?.message || ''
       if (/not found|404/i.test(message)) {

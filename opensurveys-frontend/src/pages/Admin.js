@@ -89,9 +89,7 @@ export default function AdminPage() {
 
       // Keep local session in sync if the signed-in admin edited themselves.
       if (currentUsername && (currentUsername === editing.username || currentUsername === updated.username)) {
-        localStorage.setItem('username', updated.username)
-        localStorage.setItem('role', updated.role || 'USER')
-        if (updated.role !== 'ADMIN') {
+        if (updated.role !== 'ADMIN' || updated.username !== currentUsername) {
           logout()
           navigate('/home', { replace: true })
         }

@@ -20,6 +20,8 @@ public interface UserRepository extends JpaRepository<User,Long> {
 
     Optional<User> findByEmailIgnoreCase(String email);
 
+    boolean existsByEmailIgnoreCase(String email);
+
     // Roles are always written uppercase (User.ROLE_USER / User.ROLE_ADMIN).
     long countByRole(String role);
 

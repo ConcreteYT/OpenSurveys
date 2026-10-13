@@ -46,11 +46,10 @@ public class Form {
     @Column(name = "access_code", length = 8, unique = true, nullable = true)
     private String accessCode;
 
-    // When true (default), anyone with the form id can load aggregated answers via
-    // GET /forms/{id}/responses. When false, only the form's creator may view responses.
-    @ColumnDefault("true")
+    // New surveys are private until the owner opts in. Existing rows keep their stored value.
+    @ColumnDefault("false")
     @Column(name = "responses_public", nullable = false)
-    private boolean responsesPublic = true;
+    private boolean responsesPublic = false;
 
     // When true (default), the fill page treats a completed survey in this browser as finished.
     // When false, the thank-you screen offers another response from the same browser.

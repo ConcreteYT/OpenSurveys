@@ -22,11 +22,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import com.opensurveys.service.SpreadsheetExport;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
@@ -88,6 +88,7 @@ public class FormMediaController {
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(contentType))
                     .header(HttpHeaders.CACHE_CONTROL, "private, max-age=3600")
+                    .header("X-Content-Type-Options", "nosniff")
                     .body(resource);
         } catch (IOException | IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
@@ -143,8 +144,8 @@ public class FormMediaController {
     private void writeExportZip(OutputStream outputStream, long formId, List<Answer> answers) throws IOException {
         Set<String> imageNames = new LinkedHashSet<>();
         try (ZipOutputStream zip = new ZipOutputStream(outputStream)) {
-            zip.putNextEntry(new ZipEntry("responses.csv"));
-            writeCsvRows(zip, answers, imageNames);
+            zip.putNextEntry(new ZipEntry("responses.xlsx"));
+            zip.write(SpreadsheetExport.responsesWorkbook(responseRows(answers, imageNames)));
             zip.closeEntry();
 
             for (String imageName : imageNames) {
@@ -161,9 +162,9 @@ public class FormMediaController {
         }
     }
 
-    private static void writeCsvRows(OutputStream zip, List<Answer> answers, Set<String> imageNames) throws IOException {
-        OutputStreamWriter csv = new OutputStreamWriter(zip, StandardCharsets.UTF_8);
-        csv.write("answer_id,question_id,question_text,question_type,answer\n");
+    private static List<String[]> responseRows(List<Answer> answers, Set<String> imageNames) {
+        List<String[]> rows = new java.util.ArrayList<>();
+        rows.add(new String[] {"answer_id", "question_id", "question_text", "question_type", "answer"});
         for (Answer answer : answers) {
             Question question = answer.getQuestion();
             if (question == null) {
@@ -173,37 +174,19 @@ public class FormMediaController {
             if (QuestionType.is(question.getQuestionType(), QuestionType.IMAGE_UPLOAD)) {
                 imageNames.addAll(UploadStorageService.splitAnswerFileNames(answerText));
             }
-            csv.write(csvCell(answer.getId()));
-            csv.write(',');
-            csv.write(csvCell(question.getId()));
-            csv.write(',');
-            csv.write(csvCell(question.getQuestionText()));
-            csv.write(',');
-            csv.write(csvCell(question.getQuestionType()));
-            csv.write(',');
-            csv.write(csvCell(answerText));
-            csv.write('\n');
+            rows.add(new String[] {
+                    String.valueOf(answer.getId()),
+                    String.valueOf(question.getId()),
+                    question.getQuestionText() == null ? "" : question.getQuestionText(),
+                    question.getQuestionType() == null ? "" : String.valueOf(question.getQuestionType()),
+                    answerText
+            });
         }
-        csv.flush();
+        return rows;
     }
 
     private boolean isFileReferencedByFormAnswers(long formId, String fileName) {
         return answerRepository.findAnswersContaining(formId, QuestionType.IMAGE_UPLOAD, fileName).stream()
                 .anyMatch(answer -> UploadStorageService.splitAnswerFileNames(answer).contains(fileName));
-    }
-
-    static String csvCell(Object value) {
-        String text = value == null ? "" : String.valueOf(value);
-        if (!text.isEmpty() && isSpreadsheetFormulaPrefix(text.charAt(0))) {
-            text = "'" + text;
-        }
-        if (text.contains("\"") || text.contains(",") || text.contains("\n") || text.contains("\r")) {
-            return "\"" + text.replace("\"", "\"\"") + "\"";
-        }
-        return text;
-    }
-
-    private static boolean isSpreadsheetFormulaPrefix(char first) {
-        return first == '=' || first == '+' || first == '-' || first == '@';
     }
 }

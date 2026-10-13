@@ -26,9 +26,6 @@ function applySession(profile) {
   if (profile?.role) {
     localStorage.setItem('role', profile.role)
   }
-  if (profile?.token) {
-    localStorage.setItem('token', profile.token)
-  }
 }
 
 export default function SettingsPage() {
@@ -66,6 +63,8 @@ export default function SettingsPage() {
   const [sendingPasswordCode, setSendingPasswordCode] = useState(false)
 
   const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteCode, setDeleteCode] = useState('')
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
 
@@ -210,7 +209,11 @@ export default function SettingsPage() {
     setDeleting(true)
     setDeleteError('')
     try {
-      await api.deleteAccount({ confirmUsername: deleteConfirm.trim() })
+      await api.deleteAccount({
+        confirmUsername: deleteConfirm.trim(),
+        currentPassword: hasPassword ? deletePassword : undefined,
+        code: hasPassword ? undefined : deleteCode.trim(),
+      })
       logout()
       navigate('/home', { replace: true })
     } catch (err) {
@@ -534,6 +537,33 @@ export default function SettingsPage() {
             )}
             <form onSubmit={handleDeleteAccount}>
               <div className="mb-3">
+                <label className="form-label" htmlFor="settings-delete-secret">
+                  {hasPassword ? t('settings.deletePassword') : t('settings.deleteCode')}
+                </label>
+                <input
+                  id="settings-delete-secret"
+                  type={hasPassword ? 'password' : 'text'}
+                  className="form-control"
+                  value={hasPassword ? deletePassword : deleteCode}
+                  onChange={(event) => (
+                    hasPassword
+                      ? setDeletePassword(event.target.value)
+                      : setDeleteCode(event.target.value.replace(/\D/g, '').slice(0, 8))
+                  )}
+                  autoComplete={hasPassword ? 'current-password' : 'one-time-code'}
+                />
+              </div>
+              {!hasPassword && (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary mb-3"
+                  disabled={busy}
+                  onClick={() => api.sendAccountCode({ purpose: 'ACCOUNT_DELETE' })}
+                >
+                  <T k="settings.sendCode" />
+                </button>
+              )}
+              <div className="mb-3">
                 <label className="form-label" htmlFor="settings-delete-confirm">
                   {t('settings.deleteConfirmLabel', { username: accountUsername })}
                 </label>
@@ -549,7 +579,11 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 className="btn btn-danger"
-                disabled={busy || deleteConfirm.trim() !== accountUsername}
+                disabled={
+                  busy
+                  || deleteConfirm.trim() !== accountUsername
+                  || (hasPassword ? !deletePassword : deleteCode.trim().length < 8)
+                }
               >
                 <ScrambleText
                   text={deleting ? t('settings.deleting') : t('settings.deleteAccount')}

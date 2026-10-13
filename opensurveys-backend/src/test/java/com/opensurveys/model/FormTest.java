@@ -24,6 +24,11 @@ class FormTest {
     }
 
     @Test
+    void responsesPublicDefaultsToFalse() {
+        assertFalse(new Form().isResponsesPublic());
+    }
+
+    @Test
     void hasImageUploadQuestions() {
         Form form = new Form();
         assertFalse(form.hasImageUploadQuestions());

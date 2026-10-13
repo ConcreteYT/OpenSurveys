@@ -20,6 +20,8 @@ public class VerificationCode {
 
     public static final String PURPOSE_EMAIL_CHANGE = "EMAIL_CHANGE";
     public static final String PURPOSE_PASSWORD_CHANGE = "PASSWORD_CHANGE";
+    public static final String PURPOSE_SIGNUP = "SIGNUP";
+    public static final String PURPOSE_ACCOUNT_DELETE = "ACCOUNT_DELETE";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

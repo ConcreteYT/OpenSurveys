@@ -1,7 +1,11 @@
 package com.opensurveys.service;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.opensurveys.model.User;
+import com.opensurveys.model.VerificationCode;
+import com.opensurveys.model.VerificationLock;
+import com.opensurveys.repository.VerificationCodeRepository;
+import com.opensurveys.repository.VerificationLockRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.MailException;
@@ -11,28 +15,36 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.opensurveys.model.User;
-import com.opensurveys.model.VerificationCode;
-import com.opensurveys.repository.VerificationCodeRepository;
-
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HexFormat;
 import java.util.List;
 
 /**
- * Issues and validates 6-digit email verification codes for sensitive account changes.
- * Codes are stored as BCrypt hashes with a 10-minute TTL.
+ * Issues and checks 8-digit email codes. Codes are stored as HMAC-SHA256, never logged.
+ * Five wrong checks lock that purpose for 24 hours.
  */
 @Service
 public class VerificationCodeService {
 
-    private static final Logger log = LoggerFactory.getLogger(VerificationCodeService.class);
+    public static final int MAX_ATTEMPTS = 5;
+    public static final int LOCKOUT_HOURS = 24;
+
     private static final int CODE_TTL_MINUTES = 10;
+    private static final int CODE_BOUND = 100_000_000;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     @Autowired
     private VerificationCodeRepository verificationCodeRepository;
+
+    @Autowired
+    private VerificationLockRepository verificationLockRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -43,24 +55,29 @@ public class VerificationCodeService {
     @Value("${app.mail.from}")
     private String mailFrom;
 
+    @Value("${jwt.secret}")
+    private String pepper;
+
     @Transactional
-    public void sendCode(User user, String purpose) throws MailSendFailedException {
+    public void sendCode(User user, String purpose) throws MailSendFailedException, LockedOutException {
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             throw new MailSendFailedException("account has no email address");
+        }
+        VerificationLock lock = lockFor(user.getId(), purpose);
+        if (isLocked(lock)) {
+            throw new LockedOutException();
         }
 
         verificationCodeRepository.invalidateUnused(user.getId(), purpose);
 
-        String plainCode = String.format("%06d", RANDOM.nextInt(1_000_000));
+        String plainCode = String.format("%08d", RANDOM.nextInt(CODE_BOUND));
         VerificationCode record = new VerificationCode();
         record.setUserId(user.getId());
         record.setPurpose(purpose);
-        record.setCodeHash(passwordEncoder.encode(plainCode));
+        record.setCodeHash(hashCode(plainCode));
         record.setExpiresAt(Instant.now().plus(CODE_TTL_MINUTES, ChronoUnit.MINUTES));
         record.setUsed(false);
         verificationCodeRepository.save(record);
-
-        log.debug("Verification code for user {} purpose {}: {}", user.getId(), purpose, plainCode);
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
@@ -74,15 +91,18 @@ public class VerificationCodeService {
             );
             mailSender.send(message);
         } catch (MailException | IllegalStateException e) {
-            log.warn("Failed to send verification email to {}: {}", user.getEmail(), e.getMessage());
             throw new MailSendFailedException("Failed to send verification email");
         }
     }
 
     @Transactional
-    public boolean consumeCode(User user, String purpose, String plainCode) {
+    public ConsumeResult consumeCode(User user, String purpose, String plainCode) {
         if (plainCode == null || plainCode.isBlank()) {
-            return false;
+            return ConsumeResult.INVALID;
+        }
+        VerificationLock lock = lockFor(user.getId(), purpose);
+        if (isLocked(lock)) {
+            return ConsumeResult.LOCKED;
         }
 
         List<VerificationCode> candidates =
@@ -91,23 +111,81 @@ public class VerificationCodeService {
         Instant now = Instant.now();
         String trimmedCode = plainCode.trim();
 
-        // Candidates are managed within this transaction, so setUsed(true) is flushed on commit.
         for (VerificationCode candidate : candidates) {
             if (candidate.getExpiresAt().isBefore(now)) {
                 candidate.setUsed(true);
                 continue;
             }
-            if (passwordEncoder.matches(trimmedCode, candidate.getCodeHash())) {
+            if (matches(trimmedCode, candidate.getCodeHash())) {
                 candidate.setUsed(true);
-                return true;
+                lock.setFailedAttempts(0);
+                lock.setLockedUntil(null);
+                return ConsumeResult.OK;
             }
         }
-        return false;
+
+        int attempts = lock.getFailedAttempts() + 1;
+        lock.setFailedAttempts(attempts);
+        if (attempts >= MAX_ATTEMPTS) {
+            lock.setLockedUntil(now.plus(LOCKOUT_HOURS, ChronoUnit.HOURS));
+            return ConsumeResult.LOCKED;
+        }
+        return ConsumeResult.INVALID;
+    }
+
+    private VerificationLock lockFor(Long userId, String purpose) {
+        return verificationLockRepository.findByUserIdAndPurpose(userId, purpose)
+                .orElseGet(() -> {
+                    VerificationLock created = new VerificationLock();
+                    created.setUserId(userId);
+                    created.setPurpose(purpose);
+                    created.setFailedAttempts(0);
+                    try {
+                        return verificationLockRepository.saveAndFlush(created);
+                    } catch (DataIntegrityViolationException ex) {
+                        return verificationLockRepository.findByUserIdAndPurpose(userId, purpose).orElseThrow();
+                    }
+                });
+    }
+
+    private static boolean isLocked(VerificationLock lock) {
+        return lock.getLockedUntil() != null && lock.getLockedUntil().isAfter(Instant.now());
+    }
+
+    private String hashCode(String plain) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(pepper.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return "h:" + HexFormat.of().formatHex(mac.doFinal(plain.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("Could not hash verification code", e);
+        }
+    }
+
+    private boolean matches(String plain, String stored) {
+        if (stored != null && stored.startsWith("h:")) {
+            byte[] expected = hashCode(plain).getBytes(StandardCharsets.UTF_8);
+            byte[] actual = stored.getBytes(StandardCharsets.UTF_8);
+            return MessageDigest.isEqual(expected, actual);
+        }
+        return stored != null && passwordEncoder.matches(plain, stored);
+    }
+
+    public enum ConsumeResult {
+        OK,
+        INVALID,
+        LOCKED
     }
 
     public static class MailSendFailedException extends Exception {
         public MailSendFailedException(String message) {
             super(message);
+        }
+    }
+
+    public static class LockedOutException extends Exception {
+        public LockedOutException() {
+            super("too many attempts; try again in 24 hours");
         }
     }
 }

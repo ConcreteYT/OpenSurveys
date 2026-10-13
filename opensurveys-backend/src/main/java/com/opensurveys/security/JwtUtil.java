@@ -35,24 +35,41 @@ public class JwtUtil {
 
     // Subject = username, so JwtAuthFilter can look the user up via UserRepository#findByUsername.
     public String generateToken(String username) {
+        return generateToken(username, 0);
+    }
+
+    public String generateToken(String username, int tokenVersion) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
                 .subject(username)
+                .claim("ver", tokenVersion)
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(signingKey)
                 .compact();
     }
 
+    public long getExpirationMs() {
+        return expirationMs;
+    }
+
     // Never throws - any malformed/expired/tampered token yields empty so JwtAuthFilter
     // can fall through and treat the request as anonymous.
     public Optional<String> parseUsername(String token) {
+        return parse(token).map(ParsedToken::username);
+    }
+
+    public Optional<ParsedToken> parse(String token) {
         try {
-            return Optional.ofNullable(parser.parseSignedClaims(token)
-                    .getPayload()
-                    .getSubject());
+            var claims = parser.parseSignedClaims(token).getPayload();
+            String username = claims.getSubject();
+            if (username == null || username.isBlank()) {
+                return Optional.empty();
+            }
+            Number version = claims.get("ver", Number.class);
+            return Optional.of(new ParsedToken(username, version == null ? 0 : version.intValue()));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }

@@ -20,6 +20,7 @@ import NavbarAdmin from './layout/Navbar-Admin';
 import HomePage from './pages/Home';
 import HomeLoginPage from './pages/Home-Login';
 import HomeSignupPage from './pages/Home-Signup';
+import VerifyEmailPage from './pages/Home-Verify';
 import LoginHomePage from './pages/Login-Home';
 import LoginSurveysPage from './pages/Login-Surveys';
 import SurveyEditorPage from './pages/SurveyEditor';
@@ -47,6 +48,7 @@ const windowOptions = [
   { id: 'home', label: 'Navbar + Home', path: '/home', layout: Navbar, page: HomePage,protected:false },
   { id: 'login', label: 'Navbar Login + Home Login', path: '/auth/login', layout: NavbarLogin, page: HomeLoginPage,protected:false, guestOnly:true },
   { id: 'signup', label: 'Navbar Signup + Home Signup', path: '/auth/signup', layout: NavbarSignup, page: HomeSignupPage,protected:false, guestOnly:true },
+  { id: 'verify', label: 'Navbar Signup + Verify Email', path: '/auth/verify', layout: NavbarSignup, page: VerifyEmailPage, protected: false },
   { id: 'login-home', label: 'Navbar Home + Login Home', path: '/login-home', layout: NavbarHome, page: LoginHomePage,protected:true }, 
   { id: 'surveys', label: 'Navbar Surveys + Login Surveys', path: '/surveys', layout: NavbarSurveys, page: LoginSurveysPage,protected:true },
   { id: 'editor', label: 'Navbar Editor + Survey Editor', path: '/editor', layout: NavbarEditor, page: SurveyEditorPage, protected: true },

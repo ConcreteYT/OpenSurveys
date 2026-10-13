@@ -61,24 +61,20 @@ public class SecurityConfig {
                                 "/manifest.json", "/asset-manifest.json", "/robots.txt", "/logo*.png")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET,
-                                "/home", "/auth/login", "/auth/signup", "/user-view", "/login-home",
+                                "/home", "/auth/login", "/auth/signup", "/auth/verify", "/user-view", "/login-home",
                                 "/surveys", "/admin", "/editor", "/editor/*", "/settings", "/access")
                         .permitAll()
                         // AuthController: account creation and sign-in must be reachable without a token.
-                        // Path must match AuthController's actual @PostMapping("/signup"), not "/register".
                         .requestMatchers(HttpMethod.POST, "/auth/signup").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/google").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/verify").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/resend").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET, "/forms/*/responses").permitAll()
-                        // Responses stay permitAll so public surveys work anonymously; FormController
-                        // enforces owner-only access when the form's responsesPublic flag is false
-                        // (JWT is still parsed by JwtAuthFilter when a token is sent).
-                        // FormController#getForm: anonymous users fetch a form (and its
-                        // creator's username) to fill it out, so this must stay public.
-                        // Use /forms/* (one path segment) so GET /forms (list mine) is not public.
-                        // /forms/by-code/{code} is two extra segments, so /forms/* does not cover it.
+                        // Public surveys are opened by access code. GET /forms/{id} stays authenticated
+                        // and is limited to the owner in FormController.
                         .requestMatchers(HttpMethod.GET, "/forms/by-code/*").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/forms/*").permitAll()
                         // FormController#submitAnswers: whoever filled the form out anonymously
                         // (via the GET above) must be able to submit their answers without a
                         // token too - this must be listed before the plain "/forms" rule below
@@ -124,6 +120,7 @@ public class SecurityConfig {
                 .toList());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

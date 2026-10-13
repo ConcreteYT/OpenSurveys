@@ -10,12 +10,18 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.opensurveys.security.ClientRateLimiter;
 import com.opensurveys.service.AccessCodes;
 import com.opensurveys.service.CurrentUserService;
 import com.opensurveys.service.FormAccessService;
+import com.opensurveys.service.RespondentTokenService;
 import com.opensurveys.service.UploadStorageService;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 import com.opensurveys.dto.AnswerRequest;
 import com.opensurveys.dto.AnswerResponse;
@@ -65,6 +71,12 @@ public class FormController {
 
     @Autowired
     private UploadStorageService uploadStorageService;
+
+    @Autowired
+    private RespondentTokenService respondentTokenService;
+
+    @Autowired
+    private ClientRateLimiter rateLimiter;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -183,21 +195,44 @@ public class FormController {
     // /access?formId= and the editor keep using. /forms/{id} cannot capture this path:
     // that variable is a Long, and this mapping has an extra segment.
     @GetMapping("/forms/by-code/{accessCode}")
-    public ResponseEntity<?> getFormByAccessCode(@PathVariable String accessCode) {
+    public ResponseEntity<?> getFormByAccessCode(@PathVariable String accessCode,
+                                                 HttpServletRequest request,
+                                                 HttpServletResponse response) {
+        if (!rateLimiter.allow("form-code:" + request.getRemoteAddr(), 30, 60_000L)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("error", "too many requests"));
+        }
         if (!AccessCodes.isValid(accessCode)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("error", "Access code must be exactly 8 digits"));
         }
         return formRepository.findByAccessCode(accessCode)
-                .map(form -> ResponseEntity.ok(FormResponse.from(form)))
+                .map(form -> ResponseEntity.ok(respondentView(form, request, response)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
     }
 
     @GetMapping("/forms/{id}")
-    public ResponseEntity<FormResponse> getForm(@PathVariable Long id) {
-        return formRepository.findById(id)
-                .map(form -> ResponseEntity.ok(FormResponse.from(form)))
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).build());
+    public ResponseEntity<?> getForm(@PathVariable Long id,
+                                     HttpServletRequest request,
+                                     HttpServletResponse response) {
+        Optional<User> userOptional = currentUserService.get();
+        if (userOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        Optional<Form> formOptional = formRepository.findById(id);
+        if (formOptional.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        Form form = formOptional.get();
+        if (!formAccessService.canManageForm(form, userOptional.get())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "You can only view surveys you created"));
+        }
+        boolean alreadySubmitted = respondentTokenService.prepare(
+                form.getId(), form.isOneResponseOnly(), request, response);
+        FormResponse body = FormResponse.from(form);
+        body.setAlreadySubmitted(alreadySubmitted);
+        return ResponseEntity.ok(body);
     }
 
     // Aggregated answers for a form. Public when form.responsesPublic is true (anyone with
@@ -256,8 +291,10 @@ public class FormController {
     // those same question ids -> we persist one ANSWER row per AnswerRequest, each linked to
     // its Question via the FK (see Answer.question).
     @PostMapping("/forms/{id}/answers")
+    @Transactional
     public ResponseEntity<?> submitAnswers(@PathVariable Long id,
-                                           @RequestBody AnswerSubmissionRequest submissionRequest) {
+                                           @RequestBody AnswerSubmissionRequest submissionRequest,
+                                           HttpServletRequest request) {
         Optional<Form> formOptional = formRepository.findById(id);
         if (formOptional.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
@@ -292,6 +329,11 @@ public class FormController {
             answer.setAnswer(answerRequest.getAnswer());
             answer.setQuestion(question);
             answersToSave.add(answer);
+        }
+
+        if (form.isOneResponseOnly() && !respondentTokenService.consume(form.getId(), request)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "This survey already has a response from this browser"));
         }
 
         List<Answer> savedAnswers = answerRepository.saveAll(answersToSave);
@@ -391,10 +433,16 @@ public class FormController {
         return formRequest.getQuestions() != null ? formRequest.getQuestions() : List.of();
     }
 
-    // responsesPublic and oneResponseOnly default to true when the client omits them.
+    private FormResponse respondentView(Form form, HttpServletRequest request, HttpServletResponse response) {
+        boolean alreadySubmitted = respondentTokenService.prepare(
+                form.getId(), form.isOneResponseOnly(), request, response);
+        return FormResponse.forRespondent(form, alreadySubmitted);
+    }
+
+    // responsesPublic defaults to private. oneResponseOnly defaults to true when omitted.
     private static void applyFormFields(Form form, FormRequest formRequest) {
         form.setName(formRequest.getName());
-        form.setResponsesPublic(formRequest.getResponsesPublic() == null || formRequest.getResponsesPublic());
+        form.setResponsesPublic(Boolean.TRUE.equals(formRequest.getResponsesPublic()));
         form.setOneResponseOnly(formRequest.getOneResponseOnly() == null || formRequest.getOneResponseOnly());
     }
 

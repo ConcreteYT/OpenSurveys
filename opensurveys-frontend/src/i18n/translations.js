@@ -85,6 +85,16 @@ const en = {
   'signup.errorMatch': 'Passwords do not match.',
   'signup.error': 'Unable to sign up. Please try again.',
 
+  'verify.title': 'Verify your email',
+  'verify.blurb': 'Enter the 8-digit code we sent to your email.',
+  'verify.username': 'Username',
+  'verify.code': 'Verification code',
+  'verify.submit': 'Verify',
+  'verify.submitting': 'Verifying...',
+  'verify.resend': 'Resend code',
+  'verify.sent': 'If the account still needs verification, a new code was sent.',
+  'verify.error': 'Could not verify this code. Please try again.',
+
   'dashboard.welcome': 'Welcome {name}',
   'dashboard.blurb':
     'Your survey workspace is ready. Start creating a polished experience for your audience in just a few clicks.',
@@ -320,6 +330,8 @@ const en = {
   'settings.deleteAccount': 'Delete account',
   'settings.deleting': 'Deleting…',
   'settings.deleteMismatch': 'Type your username exactly to confirm.',
+  'settings.deletePassword': 'Current password',
+  'settings.deleteCode': 'Verification code',
 
   'userView.first': 'First',
   'userView.last': 'Last',
@@ -398,6 +410,16 @@ const de = {
   'signup.login': 'Anmelden',
   'signup.errorMatch': 'Passwörter stimmen nicht überein.',
   'signup.error': 'Registrierung fehlgeschlagen. Bitte erneut versuchen.',
+
+  'verify.title': 'E-Mail bestätigen',
+  'verify.blurb': 'Gib den 8-stelligen Code ein, den wir an deine E-Mail gesendet haben.',
+  'verify.username': 'Benutzername',
+  'verify.code': 'Verifizierungscode',
+  'verify.submit': 'Bestätigen',
+  'verify.submitting': 'Wird bestätigt...',
+  'verify.resend': 'Code erneut senden',
+  'verify.sent': 'Falls das Konto noch bestätigt werden muss, wurde ein neuer Code gesendet.',
+  'verify.error': 'Dieser Code konnte nicht bestätigt werden. Bitte erneut versuchen.',
 
   'dashboard.welcome': 'Willkommen {name}',
   'dashboard.blurb':
@@ -636,6 +658,8 @@ const de = {
   'settings.deleteAccount': 'Konto löschen',
   'settings.deleting': 'Wird gelöscht…',
   'settings.deleteMismatch': 'Gib deinen Benutzernamen genau ein, um zu bestätigen.',
+  'settings.deletePassword': 'Aktuelles Passwort',
+  'settings.deleteCode': 'Verifizierungscode',
 
   'userView.first': 'Vorname',
   'userView.last': 'Nachname',

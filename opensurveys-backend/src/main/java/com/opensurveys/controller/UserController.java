@@ -71,9 +71,16 @@ public class UserController {
                     .body(Map.of("error", "cannot demote the last admin"));
         }
 
+        String newEmail = request.getEmail() == null ? "" : request.getEmail().trim();
+        Optional<User> sameEmail = userRepository.findByEmailIgnoreCase(newEmail);
+        if (!newEmail.isEmpty() && sameEmail.isPresent() && !sameEmail.get().getId().equals(id)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "email already taken"));
+        }
+
         user.setName(request.getName() == null ? "" : request.getName().trim());
         user.setUsername(newUsername);
-        user.setEmail(request.getEmail() == null ? "" : request.getEmail().trim());
+        user.setEmail(newEmail);
         user.setRole(newRole);
         userRepository.save(user);
 
