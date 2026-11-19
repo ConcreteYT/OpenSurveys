@@ -1,5 +1,10 @@
 # Open Surveys
 
+# Status
+
+Currently on hold due to exams for all involved devs.
+Estimated time of return : Mid December(17-20)
+
 ## What this software is
 
 Open Surveys is a full-stack survey (polling) web app built as a school learning project. Users can register, sign in, create and edit surveys, and share them so others can fill them out without an account. Admins can manage user accounts.
