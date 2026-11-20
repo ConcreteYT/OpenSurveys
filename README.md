@@ -4,7 +4,8 @@
 
 Currently on hold due to exams for all involved devs.
 Estimated time of return : Mid December(17-20)
-Email : concreteboom4138@gmail.com(will take a few days to answer. Please include "Opensurveys" in your title
+
+Email : concreteboom4138@gmail.com(will take a few days to answer. Please include "Opensurveys" in your title)
 
 ## What this software is
 
