@@ -190,11 +190,25 @@ cd ..\opensurveys-backend
 .\mvnw.cmd spring-boot:run
 ```
 
+macOS / Linux:
+
+```bash
+cd ../opensurveys-backend
+./mvnw spring-boot:run
+```
+
 Or package a JAR and run it:
 
 ```powershell
 .\mvnw.cmd package
 java -jar target\<jar-name>.jar
+```
+
+macOS / Linux:
+
+```bash
+./mvnw package
+java -jar target/<jar-name>.jar
 ```
 
 (Use the actual JAR filename from `target/`.)
