@@ -69,5 +69,6 @@ file-docs/
 opensurveys-backend/src/main/resources/static/**
 !opensurveys-backend/src/main/resources/static/.gitkeep
 hostinstructions.md
+impressum-datenschutz.md
 resource-usage-after.txt
 resource-usage-baseline.txt
