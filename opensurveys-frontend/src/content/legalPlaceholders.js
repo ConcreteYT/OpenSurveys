@@ -22,7 +22,7 @@ export const legalPlaceholders = {
   'Hosting-Anbieter': '',
   // Postal address of that company, from its German terms. The VPS itself is in London.
   'Anschrift des Hosting-Anbieters': '',
-  // Company that sends the verification codes. The mailbox is mailingtestpolling@gmail.com.
+  // Company that sends the verification codes.
   'E-Mail-Anbieter': '',
   // Data-protection authority of the operator's German state.
   'Zuständige Aufsichtsbehörde': '',
