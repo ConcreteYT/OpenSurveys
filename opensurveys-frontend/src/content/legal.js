@@ -105,6 +105,7 @@ export const legalDocuments = {
           paragraphs: [
             'Wer eine Umfrage anlegt, speichert Fragetexte, Antwortoptionen und Einstellungen, etwa ob Ergebnisse öffentlich sind und ob nur eine Teilnahme erlaubt ist. Der Benutzername der erstellenden Person kann für Teilnehmende sichtbar sein.',
             'Teilnehmende ohne Konto können Antworten absenden. Was darin steht, legt die jeweilige Umfrage fest. Schreibe keine Daten hinein, die andere nicht sehen sollen, besonders wenn Ergebnisse öffentlich sind.',
+            'Eine Umfrage kann das Hochladen von Bildern erlauben (JPEG, PNG, WebP oder GIF, höchstens 100 MB je Frage). Die Dateien liegen auf demselben Server wie die Datenbank. Sind die Ergebnisse sichtbar, können die Bilder mit angezeigt werden. Ein Foto einer Person ist ein personenbezogenes Datum.',
             'Der eingegebene Zugangscode wird in der sessionStorage des Browsers gemerkt, damit dieselbe Umfrage in diesem Tab wieder geöffnet werden kann. Sie wird beim Schließen des Tabs verworfen.',
             'Ist nur eine Teilnahme erlaubt, setzt der Server ein httpOnly-Cookie mit dem Namen osr_ und der Umfragenummer. Es gilt etwa zwei Stunden. Auf dem Server liegt nur ein Hash dieses Werts, damit derselbe Browser die Umfrage nicht ein zweites Mal abschickt. Zusätzlich merkt sich der Browser in localStorage, dass diese Umfrage schon abgeschickt wurde.',
             'Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO für die erstellende Person und Art. 6 Abs. 1 lit. f DSGVO für den Betrieb der Umfrage und den Schutz vor Mehrfachteilnahmen.',
@@ -114,12 +115,20 @@ export const legalDocuments = {
           heading: 'Darstellung im Browser',
           paragraphs: [
             'Helles oder dunkles Design, Akzentfarbe und Sprache (Deutsch oder Englisch) speichert der Browser in localStorage, damit die Auswahl beim nächsten Besuch erhalten bleibt. Das sind keine Werbecookies. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO und § 25 Abs. 2 TDDDG, weil die Speicherung die von dir gewählte Darstellung umsetzt.',
+            'Bestätigst du den Hinweis beim ersten Besuch, merkt sich der Browser das ebenfalls in localStorage. Diese Markierung wird nicht an den Server gesendet.',
           ],
         },
         {
           heading: 'Administration',
           paragraphs: [
             'Personen mit der Rolle ADMIN können Nutzerkonten einsehen, bearbeiten und löschen, um die Demo zu betreuen. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO.',
+          ],
+        },
+        {
+          heading: 'IP-Adresse',
+          paragraphs: [
+            'Beim Anmelden, Registrieren, erneuten Senden eines Verifizierungscodes und beim Prüfen eines Zugangscodes wird die IP-Adresse im Arbeitsspeicher genutzt, um zu häufige Aufrufe zu begrenzen. Sie wird nicht in der Datenbank gespeichert und nach dem Zeitfenster verworfen, spätestens nach etwa einer Stunde. Der Server kann daneben eigene Protokolle führen.',
+            'Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (Schutz vor Missbrauch).',
           ],
         },
         {
@@ -132,7 +141,7 @@ export const legalDocuments = {
         {
           heading: 'Speicherdauer',
           paragraphs: [
-            'Kontodaten bleiben, bis du das Konto löschst oder ein Administrator es löscht. Umfragen und Antworten der erstellenden Person werden mit dem Konto entfernt. Verifizierungscodes gelten nur bis zur Verwendung oder bis zum Ablauf. Das Teilnahmecookie gilt etwa zwei Stunden. Einträge in localStorage bleiben, bis du sie im Browser löschst oder dich abmeldest (die Abmeldung entfernt die Sitzungshinweise, nicht Design und Sprache).',
+            'Kontodaten bleiben, bis du das Konto löschst oder ein Administrator es löscht. Umfragen, Antworten und hochgeladene Bilder der erstellenden Person werden mit dem Konto entfernt. Verifizierungscodes gelten nur bis zur Verwendung oder bis zum Ablauf. Das Teilnahmecookie gilt etwa zwei Stunden. Einträge in localStorage, auch der Hinweis zum ersten Besuch, bleiben, bis du sie im Browser löschst oder dich abmeldest (die Abmeldung entfernt die Sitzungshinweise, nicht Design, Sprache und den Hinweis zum ersten Besuch).',
           ],
         },
         {
@@ -259,6 +268,7 @@ export const legalDocuments = {
           paragraphs: [
             'Whoever creates a survey stores question text, options, and settings, including whether results are public and whether only one response is allowed. That person’s username can be visible to participants.',
             'People without an account can submit answers. What those answers contain is defined by the survey. Do not enter data you would not want others to see, especially when results are public.',
+            'A survey can allow image uploads (JPEG, PNG, WebP, or GIF, at most 100 MB per question). The files are stored on the same server as the database. If results are visible, the images can be shown with them. A photo of a person is personal data.',
             'The access code you type is kept in sessionStorage so the same survey can be opened again in that tab. It is dropped when the tab closes.',
             'When only one response is allowed, the server sets an httpOnly cookie named osr_ plus the survey id. It lasts about two hours. The server stores only a hash of that value so the same browser cannot submit twice. The browser also marks that survey as submitted in localStorage.',
             'The legal basis is Art. 6 (1) (b) GDPR for the creator and Art. 6 (1) (f) GDPR for running the survey and limiting repeat responses.',
@@ -268,12 +278,20 @@ export const legalDocuments = {
           heading: 'Display settings',
           paragraphs: [
             'Light or dark theme, accent color, and language (German or English) are stored in localStorage so the choice is still there on the next visit. These are not advertising cookies. The legal basis is Art. 6 (1) (f) GDPR and § 25 (2) TDDDG, because the storage applies the display you chose.',
+            'If you confirm the notice on your first visit, the browser stores that in localStorage as well. That flag is not sent to the server.',
           ],
         },
         {
           heading: 'Administration',
           paragraphs: [
             'People with the ADMIN role can view, edit, and delete user accounts in order to look after the demo. The legal basis is Art. 6 (1) (f) GDPR.',
+          ],
+        },
+        {
+          heading: 'IP address',
+          paragraphs: [
+            'On sign-in, sign-up, resending a verification code, and checking an access code, the IP address is kept in memory to limit repeated requests. It is not stored in the database and is dropped after the time window, at the latest after about an hour. The server may keep its own logs besides that.',
+            'The legal basis is Art. 6 (1) (f) GDPR (preventing abuse).',
           ],
         },
         {
@@ -286,7 +304,7 @@ export const legalDocuments = {
         {
           heading: 'Retention',
           paragraphs: [
-            'Account data stays until you delete the account or an administrator deletes it. That creator’s surveys and answers are removed with the account. Verification codes last only until they are used or they expire. The response cookie lasts about two hours. localStorage entries stay until you clear them in the browser or log out (logout removes the session hints, not theme and language).',
+            'Account data stays until you delete the account or an administrator deletes it. That creator’s surveys, answers, and uploaded images are removed with the account. Verification codes last only until they are used or they expire. The response cookie lasts about two hours. localStorage entries, including the first-visit notice, stay until you clear them in the browser or log out (logout removes the session hints, not theme, language, or the first-visit notice).',
           ],
         },
         {
