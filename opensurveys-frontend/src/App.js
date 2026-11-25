@@ -27,6 +27,10 @@ import SurveyEditorPage from './pages/SurveyEditor';
 import AdminPage from './pages/Admin';
 import Access from './pages/access';
 import SettingsPage from './pages/Settings';
+import ImpressumPage from './pages/Impressum';
+import DatenschutzPage from './pages/Datenschutz';
+import LegalFooter from './layout/LegalFooter';
+import ProjectBanner from './layout/ProjectBanner';
 import { runThemeWipe } from './animations/themeWipe';
 import { ACCENT_COLORS } from './animations/AccentCycleButton';
 import PersistentBlobs from './animations/PersistentBlobs';
@@ -55,6 +59,8 @@ const windowOptions = [
   { id: 'editor-edit', label: 'Navbar Editor + Survey Editor Edit', path: '/editor/:formId', layout: NavbarEditor, page: SurveyEditorPage, protected: true },
   { id: 'admin', label: 'Navbar Admin + Admin', path: '/admin', layout: NavbarAdmin, page: AdminPage, protected: true, adminOnly: true },
   { id: 'settings', label: 'Navbar Home + Settings', path: '/settings', layout: NavbarHome, page: SettingsPage, protected: true },
+  { id: 'impressum', label: 'Navbar + Impressum', path: '/impressum', layout: Navbar, page: ImpressumPage, protected: false },
+  { id: 'datenschutz', label: 'Navbar + Datenschutz', path: '/datenschutz', layout: Navbar, page: DatenschutzPage, protected: false },
 ];
 
 /** Renders children only when a valid JWT exists; otherwise redirects to /home. */
@@ -159,6 +165,7 @@ function App() {
           <PersistentBlobs />
           <ButtonHover />
           <div className="app-shell">
+            <ProjectBanner />
             <Routes>
               <Route path="/" element={<Navigate to="/home" replace />} />
 
@@ -201,6 +208,7 @@ function App() {
                 );
               })}
             </Routes>
+            <LegalFooter />
           </div>
         </div>
       </Router>

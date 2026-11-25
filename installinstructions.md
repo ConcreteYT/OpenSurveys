@@ -384,7 +384,33 @@ Uploaded images are stored on the **backend machine**, not in MySQL:
 
 
 
-## 9. Quick verification checklist
+## 9. Impressum and Datenschutzerklärung
+
+`/impressum` and `/datenschutz` ship with a draft in German and English. Before anyone else uses the site, either rewrite both pages yourself or keep the draft and replace every value in square brackets.
+
+The text is in `opensurveys-frontend/src/content/legal.js`. The same tokens are used in both languages, so one replace covers German and English:
+
+`[Name]` `[Straße und Hausnummer]` `[PLZ und Ort]` `[Land]` `[E-Mail]` `[Telefon]` `[Hosting-Anbieter]` `[Anschrift des Hosting-Anbieters]` `[E-Mail-Anbieter]` `[Zuständige Aufsichtsbehörde]`
+
+The draft describes this app. It is not legal advice. If you publish the site, use your real name, address, and contact details.
+
+---
+
+## 10. Student-project banner
+
+A thin bar at the top of every page says this is a student project and asks visitors not to share extremely personal information. It is on by default.
+
+To remove it, open `opensurveys-frontend/src/layout/ProjectBanner.js` and set:
+
+```js
+export const SHOW_PROJECT_BANNER = false
+```
+
+Save the file. With the dev server running, the bar disappears on its own. The space it reserved at the top closes too, so you do not need to edit CSS. Set the same constant back to `true` if you want the bar again.
+
+---
+
+## 11. Quick verification checklist
 
 Before following `[runinstructions.md](runinstructions.md)`:
 

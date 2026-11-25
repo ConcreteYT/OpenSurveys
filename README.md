@@ -5,7 +5,7 @@
 Currently on hold due to exams for all involved devs.
 Estimated time of return : Mid December(17-20)
 
-Email : concreteboom4138@gmail.com(will take a few days to answer. Please include "Opensurveys" in your title)
+Email : [contact@opensurveys.de](mailto:contact@opensurveys.de)(will take a few days to answer. Please include "Opensurveys" in your title)
 
 The demo website is currently down due to a few changes that will be made when we have time. We cant guarantee when exactly it will return.
 
@@ -39,11 +39,11 @@ For Google Sign-In, use the **same** Google Cloud Web Client ID in both `.env` f
 
 ### Authentication
 
-- Sign up and login with username/password (JWT returned)
+- Sign up and login with username/password
 - Google Sign-In (ID token verified on the backend; can create or link an account)
-- JWT stored in the browser and sent on protected API calls
+- Session JWT is an httpOnly cookie. The browser script cannot read it. `localStorage` only keeps UI hints (session flag, username, role)
 - Route guards: protected (must be logged in), guest-only (login/signup), admin-only
-- Logout clears local auth (stateless JWT — no backend logout endpoint)
+- Logout calls `POST /auth/logout`, which clears the cookie, and the frontend clears the local hints
 
 ### Roles and admin
 
@@ -54,7 +54,7 @@ For Google Sign-In, use the **same** Google Cloud Web Client ID in both `.env` f
 ### Surveys
 
 - Signed-in users create, list, and edit their own surveys
-- Question types: skippable text, text, multiple choice, rating
+- Question types: skippable text, text, multiple choice, rating, image upload
 - Creators can make response results public or private
 - Anyone can open a survey by access code and submit answers (no account required)
 - Results are public when allowed; otherwise only the creator can view them
@@ -70,13 +70,16 @@ For Google Sign-In, use the **same** Google Cloud Web Client ID in both `.env` f
 - English / German UI strings (survey content itself is not auto-translated)
 - Light/dark theme and accent color (persisted locally)
 - Main pages: home, login/signup, dashboard, surveys list, editor, fill-out/results, settings, admin
+- Public legal pages: `/impressum` and `/datenschutz` (German and English). Personal details are still placeholders until the operator fills them in
+- First-visit dialog on `/home`: says this is a demo and links to those legal pages. Agreeing is remembered in this browser
+- Student-project banner fixed to the top of every page. Turn it off with `SHOW_PROJECT_BANNER` in `opensurveys-frontend/src/layout/ProjectBanner.js` (see [`installinstructions.md`](installinstructions.md))
 
 ---
 
 ## Architecture notes
 
-- **Stateless JWT** — Spring Security validates tokens per request; the frontend also checks expiry and clears bad tokens
-- **Secrets via `.env`** — DB, JWT, admin seed, Google client ID, and mail settings are gitignored; the backend loads them at startup
+- **Session cookie** — the JWT lives in an httpOnly cookie. Spring Security validates it per request. The frontend keeps only a local hint of the session and clears it on logout
+- **Secrets via** `.env` — DB, JWT, admin seed, Google client ID, and mail settings are gitignored; the backend loads them at startup
 - **Google OAuth** — browser gets a Google ID token; backend verifies it, then issues the app’s own JWT
 - **Roles** — UI hides admin pages; backend still enforces `ROLE_ADMIN` on admin APIs
 - **Dev** — React on port 3000 proxies API calls to Spring Boot on port 8080
@@ -123,10 +126,14 @@ Setup and run details: [`installinstructions.md`](installinstructions.md) · [`r
 | **React Router DOM** | Client routing and guards |
 | **Create React App** | Dev server and build |
 | **Bootstrap 5** | Layout / components |
-| **animejs** | Motion (theme wipe, page enter, blobs, hover) |
+| **animejs** | DOM motion (page enter, blobs, button hover, icon flips) |
 | **Google Identity Services** | Browser Google Sign-In |
 | **Custom i18n** (`src/i18n/`) | EN / DE UI strings |
 | **Testing Library** | Component tests |
+
+### Possible change: anime.js → Motion
+
+The anime.js animations can be moved to [Motion](https://motion.dev/). That means rewriting the current `animate()` calls. `ScrambleText.js` and `themeWipe.js` are separate and would stay as they are.
 
 ### Database
 

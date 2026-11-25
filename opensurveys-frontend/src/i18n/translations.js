@@ -336,6 +336,18 @@ const en = {
   'userView.first': 'First',
   'userView.last': 'Last',
   'userView.handle': 'Handle',
+
+  'demoNotice.title': 'This is a demo project',
+  'banner.studentProject':
+    'Student project. Please do not share extremely personal information.',
+  'demoNotice.body':
+    'Open Surveys is a school project, not a finished commercial product. Please read the legal notice and the privacy policy before you continue.',
+  'demoNotice.agree': 'I have read this and agree',
+
+  'legal.impressum': 'Legal notice',
+  'legal.privacy': 'Privacy policy',
+  'legal.draftNote':
+    'Draft for this demo. Replace every [placeholder] with the real operator details before anyone else uses the site. This text describes how the app works; it is not legal advice.',
 }
 
 const de = {
@@ -664,6 +676,18 @@ const de = {
   'userView.first': 'Vorname',
   'userView.last': 'Nachname',
   'userView.handle': 'Handle',
+
+  'demoNotice.title': 'Dies ist ein Demoprojekt',
+  'banner.studentProject':
+    'Schülerprojekt. Bitte keine hochpersönlichen Daten teilen.',
+  'demoNotice.body':
+    'Open Surveys ist ein Schulprojekt und kein fertiges kommerzielles Angebot. Bitte lies das Impressum und die Datenschutzerklärung, bevor du fortfährst.',
+  'demoNotice.agree': 'Gelesen und einverstanden',
+
+  'legal.impressum': 'Impressum',
+  'legal.privacy': 'Datenschutzerklärung',
+  'legal.draftNote':
+    'Entwurf für diese Demo. Ersetze jeden [Platzhalter] durch die echten Angaben, bevor andere Personen die Seite nutzen. Der Text beschreibt diese Anwendung und ist keine Rechtsberatung.',
 }
 
 export const translations = { en, de }

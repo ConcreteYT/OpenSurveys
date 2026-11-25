@@ -8,6 +8,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, rememberSurveyCode } from '../api/client';
 import { useT, T } from '../i18n';
 import ScrambleText from '../animations/ScrambleText';
+import DemoNotice, { hasAcceptedDemoNotice } from './DemoNotice';
 
 export default function Home() {
   const navigate = useNavigate()
@@ -18,9 +19,9 @@ export default function Home() {
   const [isChecking, setIsChecking] = useState(false)
   const inputsRef = useRef([])
 
-  // Focus the first digit box on mount for quick entry.
+  // Focus the first digit box once the first-visit dialog is out of the way.
   useEffect(() => {
-    if (inputsRef.current[0]) inputsRef.current[0].focus()
+    if (hasAcceptedDemoNotice() && inputsRef.current[0]) inputsRef.current[0].focus()
   }, [])
 
   /** Joins the 8 digit boxes, looks the survey up by that code, then opens it by numeric id. */
@@ -57,6 +58,7 @@ export default function Home() {
 
   return (
     <div className="container py-3 py-md-5">
+      <DemoNotice onAccepted={() => inputsRef.current[0]?.focus()} />
       <section className="background-radial-gradient overflow-hidden">
         <style>{`
     .background-radial-gradient {

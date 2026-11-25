@@ -3,6 +3,7 @@
   background-color: var(--app-bg);
   color: var(--app-text);
   position: relative;
+  --project-banner-height: 2rem;
   /* Default accent (green) — overridden by .accent-* */
   --accent: #0d5c3a;
   --accent-bright: #2ecc71;
@@ -168,6 +169,29 @@
 .app-shell {
   position: relative;
   z-index: 1;
+}
+
+.app-shell:has(.project-banner) {
+  padding-top: var(--project-banner-height);
+}
+
+.project-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  min-height: var(--project-banner-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.75rem;
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  background: color-mix(in srgb, var(--accent) 18%, var(--app-bg));
+  color: var(--app-text);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .persistent-blobs {
@@ -594,6 +618,9 @@ body {
 
 /* Phone / small-tablet layout: reduce stacked padding and oversized type */
 @media (max-width: 767.98px) {
+  .App {
+    --project-banner-height: 2.75rem;
+  }
   .background-radial-gradient {
     padding: 12px !important;
     border-radius: 12px !important;
@@ -640,4 +667,138 @@ body {
     max-width: 100%;
     width: 100%;
   }
+}
+
+.legal-page {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.legal-page h1 {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  margin-bottom: 1.25rem;
+}
+
+.legal-page h2 {
+  font-size: 1.15rem;
+  margin-top: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.legal-page p {
+  margin-bottom: 0.75rem;
+  line-height: 1.55;
+}
+
+.legal-note {
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.legal-placeholder {
+  font-weight: 600;
+  padding: 0 0.2em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.legal-footer {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 1.25rem 1rem 1.75rem;
+}
+
+.legal-footer a {
+  color: var(--app-text);
+  text-underline-offset: 0.2em;
+}
+
+.demo-notice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.app-shell:has(.project-banner) .demo-notice-backdrop {
+  top: var(--project-banner-height);
+}
+
+.demo-notice {
+  width: min(32rem, 100%);
+  padding: 1.5rem 1.35rem 1.35rem;
+  border-radius: 16px;
+  background: var(--app-bg);
+  color: var(--app-text);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+}
+
+.demo-notice-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.demo-notice-title {
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.demo-notice-lang {
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--app-text) 25%, transparent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--app-text);
+}
+
+.demo-notice-body {
+  margin: 0 0 1rem;
+  line-height: 1.5;
+}
+
+.demo-notice-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  margin-bottom: 1.15rem;
+}
+
+.demo-notice-links a {
+  color: var(--accent-bright);
+  font-weight: 600;
+  text-underline-offset: 0.2em;
+}
+
+.demo-notice-confirm {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.demo-notice-confirm:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 3px;
+}
+
+.demo-notice,
+.demo-notice h2,
+.demo-notice p {
+  opacity: 1 !important;
+  transform: none !important;
 }
