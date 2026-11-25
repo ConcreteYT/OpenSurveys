@@ -1,9 +1,26 @@
 /**
- * Impressum and privacy copy. Bracketed tokens are placeholders the operator
- * must replace before the site is offered to other people.
- * The same tokens are used in both languages so one search replaces them everywhere.
+ * Impressum and privacy copy. Bracketed tokens are filled from legalPlaceholders.js.
+ * The same tokens are used in both languages.
  */
-export const legalDocuments = {
+import { legalPlaceholders } from './legalPlaceholders'
+
+function fillText(text) {
+  return text.replace(/\[([^\]]+)\]/g, (match, key) => {
+    const value = legalPlaceholders[key]
+    return value == null || value === '' ? match : value
+  })
+}
+
+function fillNode(node) {
+  if (typeof node === 'string') return fillText(node)
+  if (Array.isArray(node)) return node.map(fillNode)
+  if (node && typeof node === 'object') {
+    return Object.fromEntries(Object.entries(node).map(([key, value]) => [key, fillNode(value)]))
+  }
+  return node
+}
+
+const legalTemplates = {
   de: {
     impressum: {
       title: 'Impressum',
@@ -331,3 +348,5 @@ export const legalDocuments = {
     },
   },
 }
+
+export const legalDocuments = fillNode(legalTemplates)

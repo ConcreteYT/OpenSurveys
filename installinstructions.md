@@ -386,11 +386,11 @@ Uploaded images are stored on the **backend machine**, not in MySQL:
 
 ## 9. Impressum and Datenschutzerklärung
 
-`/impressum` and `/datenschutz` ship with a draft in German and English. Before anyone else uses the site, either rewrite both pages yourself or keep the draft and replace every value in square brackets.
+`/impressum` and `/datenschutz` ship with a draft in German and English. Before anyone else uses the site, either rewrite both pages yourself or keep the draft and fill in `opensurveys-frontend/src/content/legalPlaceholders.js`.
 
-The text is in `opensurveys-frontend/src/content/legal.js`. The same tokens are used in both languages, so one replace covers German and English:
+That file is the only place for the bracketed values. `legal.js` copies each value into the German and English text. Leave a value as `''` until you know it. The page then keeps the bracket and highlights it. Do not paste the bracket text into this file.
 
-`[Name]` `[Straße und Hausnummer]` `[PLZ und Ort]` `[Land]` `[E-Mail]` `[Telefon]` `[Hosting-Anbieter]` `[Anschrift des Hosting-Anbieters]` `[E-Mail-Anbieter]` `[Zuständige Aufsichtsbehörde]`
+`Name` `Straße und Hausnummer` `PLZ und Ort` `Land` `E-Mail` `Telefon` `Hosting-Anbieter` `Anschrift des Hosting-Anbieters` `E-Mail-Anbieter` `Zuständige Aufsichtsbehörde`
 
 The draft describes this app. It is not legal advice. If you publish the site, use your real name, address, and contact details.
 
