@@ -7,8 +7,6 @@ Estimated time of return : Mid December(17-20)
 
 Email : [contact@opensurveys.de](mailto:contact@opensurveys.de)(will take a few days to answer. Please include "Opensurveys" in your title)
 
-The demo website is currently down due to a few changes that will be made when we have time. We cant guarantee when exactly it will return.
-
 ## What this software is
 
 Open Surveys is a full-stack survey (polling) web app built as a school learning project. Users can register, sign in, create and edit surveys, and share them so others can fill them out without an account. Admins can manage user accounts.
